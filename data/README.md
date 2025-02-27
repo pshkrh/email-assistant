@@ -46,6 +46,7 @@ Follow these steps to get started:
    python -m venv venv
    source venv/bin/activate  # On Linux/Mac
    # or venv\Scripts\activate  # On Windows
+   deactivate # Close venv
    ```
 
 3. **Install DVC**  
@@ -61,6 +62,7 @@ Follow these steps to get started:
 5. **Initialize DVC:**
    ```bash
    dvc init
+      # This creates a .dvc/ folder and updates .gitignore so that large data files aren’t accidentally tracked by Git.
    ```
 
 ---
@@ -91,17 +93,23 @@ Follow these steps to get started:
 
 1. **Add the dataset to DVC:**
    ```bash
-   dvc add data/your_dataset.csv
+   # Assume you have a dataset file at data/your_dataset.
+   dvc add data/enron_emails.csv
    ```
 2. **Commit the `.dvc` file to Git:**
    ```bash
-   git add data/your_dataset.csv.dvc .gitignore
+   git add data/enron_emails.csv.dvc .gitignore
    git commit -m "Track dataset with DVC"
    ```
+   This command:
+   - Calculates a hash of your dataset.
+   - Creates a .dvc file (e.g., data/enron_emails.csv.dvc) with metadata about the file.
+   - Updates .gitignore so Git ignores the actual CSV but tracks the .dvc file.
 
 ### 4.2 Updating Data
 
-1. Modify `data/your_dataset.csv`.
+1. Overwrite or update `data/enron_emails.csv`. 
+      - If your dataset changes (e.g., new rows, new version):
 2. Run:
    ```bash
    dvc add data/enron_emails.csv
@@ -111,6 +119,7 @@ Follow these steps to get started:
    git add data/enron_emails.csv.dvc
    git commit -m "Update dataset"
    ```
+- Each commit in Git now corresponds to a different dataset version in DVC.
 
 ### 4.3 Switching Between Versions
 
@@ -122,22 +131,35 @@ Follow these steps to get started:
    ```bash
    dvc checkout
    ```
+- DVC will retrieve or link the dataset version matching that Git commit.
 
 ---
 
 ## 5. Git Integration
 
 ### Files to Track with Git
-- **Tracked:** `.py` files, `.dvc` files, `.gitignore`
-- **Ignored:** Actual dataset files (handled by DVC)
+- **Tracked:** `.py, config` files, `.dvc, dvc.yaml, dvc.lock` files, `.gitignore`
+- **Ignored:**
+	- Large data files (data/your_dataset).
+	- DVC cache (.dvc/cache).
+	- Any other large or generated files.
+
 
 ### Basic Git Commands
 ```bash
+# See changes
 git status
-git add <file>
+
+# Stage changes
+git add <file_or_folder>
+
+# Commit changes
 git commit -m "Your commit message"
+
+# Push to remote repository
 git push origin main
 ```
+
 
 ---
 
@@ -148,11 +170,12 @@ git push origin main
    git clone <YOUR_REPOSITORY_URL>
    cd <YOUR_REPOSITORY_FOLDER>
    ```
-2. Install DVC:
+2. Install DVC and any Python dependencies:
    ```bash
    pip install dvc
+   # pip install -r requirements.txt (if you have a requirements file)
    ```
-3. Retrieve the dataset:
+3. Pull the data (assuming you have set up a DVC remote or have the .dvc/cache locally):
    ```bash
    dvc pull
    ```
@@ -172,17 +195,7 @@ git push origin main
 
 ---
 
-## 8. Submitting Your Work (Optional)
-
-### Files to Submit
-- Your Python scripts (`dataframe.py`, `download_dataset.py`)
-- `.dvc` files
-- `.gitignore`
-- `README.md`
-
----
-
-## 9. Further Reading
+## 8. Further Reading
 
 - [DVC Documentation](https://dvc.org/doc)
 - [Official Git Documentation](https://git-scm.com/doc)
