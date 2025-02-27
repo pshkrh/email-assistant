@@ -69,3 +69,12 @@ def process_enron_emails(data_dir):
 if __name__ == "__main__":
     # Process all emails
     df_enron = process_enron_emails(MAILDIR_PATH)
+
+    output_folder = "mlops-project/data"
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
+    # Save DataFrame to CSV inside the 'data' folder
+    output_path = os.path.join(output_folder, "enron_emails.csv")
+    df_enron.to_csv(output_path, index=False)
+    print(f"DataFrame saved to {output_path}")

@@ -2,3 +2,5 @@
 .DS_Store
 *.tar.gz
 dataset/
+venv/
+__pycache__/

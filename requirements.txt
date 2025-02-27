@@ -1,7 +1,8 @@
 numpy
 pandas
-os
-email
-tarfile
-warnings
-urllib.request
+# os
+# email
+# tarfile
+# warnings
+# urllib.request
+dvc
