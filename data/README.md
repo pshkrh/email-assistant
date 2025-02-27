@@ -70,13 +70,15 @@ Follow these steps to get started:
 ```
 .
 ├── data/
-│   └── your_dataset.csv       # Large dataset tracked by DVC
-├── src/
+│   └── enron_emails.csv       # Large dataset tracked by DVC
+│   └── enron_emails.csv.dvc   # DVC metafile tracking dataset
+│   └── .gitignore             # Git ignore file (DVC updates this automatically)
+│   └── README.md              # This readme file to learn how to use DVC
+├── data_pipeline/scripts/
 │   ├── dataframe.py           # Python script for dataset manipulation
 │   └── download_dataset.py    # Python script for downloading data
 ├── .dvc/                      # DVC internal files (created by dvc init)
-├── .gitignore                 # Git ignore file (DVC updates this automatically)
-├── your_dataset.csv.dvc       # DVC metafile tracking dataset
+├── .gitignore                 # Git ignore file (folder/file don't want to git push)
 ├── README.md                  # This readme file
 └── requirements.txt           # (Optional) For Python dependencies
 ```
@@ -102,11 +104,11 @@ Follow these steps to get started:
 1. Modify `data/your_dataset.csv`.
 2. Run:
    ```bash
-   dvc add data/your_dataset.csv
+   dvc add data/enron_emails.csv
    ```
 3. Commit the changes:
    ```bash
-   git add data/your_dataset.csv.dvc
+   git add data/enron_emails.csv.dvc
    git commit -m "Update dataset"
    ```
 

@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import email
 # Path to the extracted dataset
-MAILDIR_PATH = "enron_dataset/maildir"
+MAILDIR_PATH = "mlops-project/dataset/maildir"
 
 # Headers to extract
 HEADER_KEYS = ["Message-ID", "Date", "From", "To", "Subject", "Cc", "Bcc", "X-From", "X-To", "X-Cc"]
