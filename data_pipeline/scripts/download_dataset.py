@@ -30,7 +30,7 @@ def extract_enron_dataset(archive_path, extract_to):
 
 if __name__ == "__main__":
     # Step 1: Download dataset
-    download_enron_dataset(ENRON_URL, ARCHIVE_NAME)
+    download_enron_dataset(DATASET_URL, ARCHIVE_NAME)
 
     # Step 2: Extract dataset
     extract_enron_dataset(ARCHIVE_NAME, DATA_DIR)
