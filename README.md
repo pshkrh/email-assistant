@@ -207,6 +207,12 @@ MailMate's pipeline consists of several stages to ensure clean, structured, and 
 - **DVC ensures consistency** across different experiments and team members working with the data.  
 - **Airflow DAG Task**: `track_data_version_task` integrates **DVC into the pipeline**, ensuring that every dataset version is properly recorded.  
 
+#### DVC Setup Guide  
+
+For instructions on setting up **Data Version Control (DVC)** for this project, refer to the dedicated **DVC README** inside the `data/` folder.  
+
+📄 **[DVC Setup Guide](data/README.md)**  
+
 ---
 
 ### **5️⃣ Anomaly Detection**  
