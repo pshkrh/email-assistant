@@ -21,3 +21,4 @@ dags/__pycache__/
 dags/data_pipeline/gx/
 logs/*
 data_pipeline/tests/data/true_csv/*
+.dvc/

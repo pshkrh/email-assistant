@@ -82,9 +82,8 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
 ### Prerequisites
 
 1. **git** installed on your machine.
-2. **Python >= 3.8** installed (check using `python --version`).
+2. **Python == 3.11** installed (check using `python --version`).
 3. **Docker** daemon/desktop installed and running (for containerizing the Airflow pipeline).
-4. (Optional) **GPU** setup if you plan to train large-scale NLP models locally.
 
 ### User Installation
 
@@ -107,9 +106,18 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
    pip install -r requirements.txt
    ```
 
-4. **Run Airflow**:
+4. **Configure DVC Setup**:
 
-   - Paste and enter Your Terminal from root_directory i.e., email_assistant
+   - Create a Google Cloud Storage Bucket, follow this (https://www.mlwithramin.com/blog/dvc-lab1)
+   - Save the credentials.json file at your desired location
+   - In Terminal, at the root of the project i.e., email-assistant/, enter
+     - dvc init
+     - dvc remote add -d <desired_remote_name> gs://<your_bucket_name>
+     - dvc remote modify <created_desired_remote_name> credentialpath <credentials.json_path_relative_to_email_assitant/>
+
+5. **Run Airflow**:
+
+   - Enter the following to your terminal from root_directory i.e., email_assistant/
 
    ```bash
    echo -e "AIRFLOW_UID=$(id -u)" > .env
@@ -120,6 +128,14 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
    ```bash
    AIRFLOW_UID=50000
    ```
+
+   - Create GMAIL API Oauth client and download its credential.json,
+
+     - Select Application as Desktop and give scope of GmailAPIService - https://mail.google.com/, Follow this (https://support.google.com/googleapi/answer/6158849?hl=en)
+
+     - Set these credentials as shown in .env file as shown in .env-sample file
+
+     - You can skip creating GMAIL API Oauth client if you don't want to send email notifications, it will log error in anomaly task.
 
    - Initialize Database
 
@@ -133,7 +149,7 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
    docker compose up --build
    ```
 
-5. **Run the DAG in Airflow**:
+6. **Run the DAG in Airflow**:
 
    - Keep watch for this line in terminal
 
@@ -150,10 +166,20 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
 
    - Run the DAG by clicking on the play button on the right side of the window once you see **data_pipeline_dag**.
 
-6. **Shutdown** containers:
+   - Task performance can be time consuming depending on the resources provided to docker.
+
+7. **Shutdown** containers:
+
    ```bash
    docker compose down
    ```
+
+8. **Tests** :
+   - To run tests from root diectory email_assistan/
+   ```bash
+   pytest data_pipeline/tests/*.py -v
+   ```
+   - For individual tests replace \* with test file name from data_pipeline/tests/
 
 ---
 
