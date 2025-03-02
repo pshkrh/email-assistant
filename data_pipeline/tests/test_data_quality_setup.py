@@ -25,16 +25,6 @@ from data_quality_setup import (
 # pylint: enable=wrong-import-position
 
 
-@pytest.fixture
-def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
-    return {
-        "context_root_dir": str(tmp_path / "gx"),
-        "log_path": str(tmp_path / "logs" / "test_data_quality_log.log"),
-        "logger_name": "test_data_quality_logger",
-    }
-
-
 # pylint: disable=redefined-outer-name
 def test_setup_gx_context_and_logger_success(mocker: MockerFixture, setup_paths):
     """Test successful setup of Great Expectations context and logger."""
@@ -69,6 +59,7 @@ def test_setup_gx_context_and_logger_dir_creation_failure(
     mocker.patch("os.makedirs", side_effect=PermissionError("Permission denied"))
 
     result = setup_gx_context_and_logger(
+        # pylint: disable=duplicate-code
         setup_paths["context_root_dir"],
         setup_paths["log_path"],
         setup_paths["logger_name"],
@@ -92,6 +83,7 @@ def test_setup_gx_context_and_logger_gx_context_failure(
     )
 
     result = setup_gx_context_and_logger(
+        # pylint: disable=duplicate-code
         setup_paths["context_root_dir"],
         setup_paths["log_path"],
         setup_paths["logger_name"],
@@ -129,7 +121,9 @@ def test_setup_gx_context_and_logger_existing_dir(mocker: MockerFixture, setup_p
 
 
 # Placeholder test for full pipeline (requires external scripts)
-def test_full_pipeline_placeholder(mocker: MockerFixture, setup_paths, tmp_path):
+def test_full_pipeline_placeholder(
+    mocker: MockerFixture, sample_email_data, setup_paths, tmp_path
+):
     """Placeholder test for the full pipeline - requires external scripts."""
     # Mock setup
     mock_logger = mocker.MagicMock()
@@ -151,11 +145,11 @@ def test_full_pipeline_placeholder(mocker: MockerFixture, setup_paths, tmp_path)
     csv_path = str(tmp_path / "enron_emails.csv")
     pd.DataFrame(
         {
-            "Message-ID": ["<123@example.com>"],
-            "Date": ["Mon, 2 Jan 02 14:30:00 -0800 (PST)"],
-            "From": ["sender@example.com"],
-            "To": ["recipient@example.com"],
-            "Subject": ["Test Email"],
+            "Message-ID": sample_email_data["Message-ID"],
+            "Date": sample_email_data["Date"],
+            "From": sample_email_data["From"],
+            "To": sample_email_data["To"],
+            "Subject": sample_email_data["Subject"],
             "Body": ["Hello"],
         }
     ).to_csv(csv_path, index=False)

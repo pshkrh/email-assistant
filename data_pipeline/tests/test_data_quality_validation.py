@@ -23,38 +23,29 @@ from data_quality_validation import (
 
 
 @pytest.fixture
-def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
-    return {
-        "csv_path": str(tmp_path / "enron_emails.csv"),
-        "context_root_dir": str(tmp_path / "gx"),
-        "log_path": str(tmp_path / "logs" / "test_data_quality_log.log"),
-        "logger_name": "test_data_quality_logger",
-    }
-
-
-@pytest.fixture
 def mock_suite():
     """Fixture for a mock expectation suite."""
     return "mock_suite"
 
 
 # pylint: disable=redefined-outer-name
-def test_validate_data_success(mocker: MockerFixture, setup_paths, mock_suite):
+def test_validate_data_success(
+    mocker: MockerFixture, sample_email_data, setup_paths, mock_suite
+):
     """Test successful validation of data."""
     # Create a sample CSV with realistic email data
     initial_data = {
-        "Message-ID": ["<123@example.com>"],
+        "Message-ID": sample_email_data["Message-ID"],
         "Date": ["2023-01-01"],
-        "From": ["sender@example.com"],
-        "To": ["recipient@example.com"],
+        "From": sample_email_data["From"],
+        "To": sample_email_data["To"],
         "Subject": ["Meeting"],
-        "Cc": [None],
-        "Bcc": [None],
-        "X-From": ["Sender Name"],
-        "X-To": ["Recipient Name"],
-        "X-Cc": [None],
-        "Body": ["Hello, this is a test."],
+        "Cc": sample_email_data["Cc"],
+        "Bcc": sample_email_data["Bcc"],
+        "X-From": sample_email_data["X-From"],
+        "X-To": sample_email_data["To"],
+        "X-Cc": sample_email_data["X-Cc"],
+        "Body": sample_email_data["Body"],
     }
     df = pd.DataFrame(initial_data)
     df.to_csv(setup_paths["csv_path"], index=False)
@@ -120,22 +111,11 @@ def test_validate_data_missing_csv(mocker: MockerFixture, setup_paths, mock_suit
     )
 
 
-def test_validate_data_empty_csv(mocker: MockerFixture, setup_paths, mock_suite):
+def test_validate_data_empty_csv(
+    mocker: MockerFixture, setup_paths, mock_suite, empty_csv
+):
     """Test validation with an empty CSV."""
-    initial_data = {
-        "Message-ID": [],
-        "Date": [],
-        "From": [],
-        "To": [],
-        "Subject": [],
-        "Cc": [],
-        "Bcc": [],
-        "X-From": [],
-        "X-To": [],
-        "X-Cc": [],
-        "Body": [],
-    }
-    df = pd.DataFrame(initial_data)
+    df = pd.DataFrame(empty_csv)
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
@@ -178,20 +158,20 @@ def test_validate_data_empty_csv(mocker: MockerFixture, setup_paths, mock_suite)
 
 
 def test_validate_data_validation_run_failure(
-    mocker: MockerFixture, setup_paths, mock_suite
+    mocker: MockerFixture, setup_paths, mock_suite, sample_email_data
 ):
     """Test failure during validation run."""
     initial_data = {
-        "Message-ID": ["<123@example.com>"],
+        "Message-ID": sample_email_data["Message-ID"],
         "Date": ["2023-01-01"],
-        "From": ["sender@example.com"],
-        "To": ["recipient@example.com"],
+        "From": sample_email_data["From"],
+        "To": sample_email_data["To"],
         "Subject": ["Meeting"],
-        "Cc": [None],
-        "Bcc": [None],
-        "X-From": ["Sender Name"],
-        "X-To": ["Recipient Name"],
-        "X-Cc": [None],
+        "Cc": sample_email_data["Cc"],
+        "Bcc": sample_email_data["Cc"],
+        "X-From": sample_email_data["X-From"],
+        "X-To": sample_email_data["X-To"],
+        "X-Cc": sample_email_data["X-Cc"],
         "Body": ["Hello"],
     }
     df = pd.DataFrame(initial_data)

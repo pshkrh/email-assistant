@@ -19,50 +19,30 @@ from clean_and_parse_dates import clean_and_parse_dates
 # pylint: enable=wrong-import-position
 
 
-@pytest.fixture
-def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
-    return {
-        "csv_path": str(tmp_path / "enron_emails.csv"),
-        "log_path": str(tmp_path / "logs" / "test_data_preprocessing_log.log"),
-        "logger_name": "test_data_preprocessing_logger",
-    }
-
-
-@pytest.fixture
-def header_keys():
-    """Fixture for HEADER_KEYS excluding Date, which is processed separately."""
-    return [
-        "Message-ID",
-        "From",
-        "To",
-        "Subject",
-        "Cc",
-        "Bcc",
-        "X-From",
-        "X-To",
-        "X-Cc",
-    ]
+# @pytest.fixture
+# def header_keys():
+#     """Fixture for HEADER_KEYS excluding Date, which is processed separately."""
+#     return [
+#         "Message-ID",
+#         "From",
+#         "To",
+#         "Subject",
+#         "Cc",
+#         "Bcc",
+#         "X-From",
+#         "X-To",
+#         "X-Cc",
+#     ]
 
 
 # pylint: disable=redefined-outer-name
-def test_clean_and_parse_dates_success(mocker: MockerFixture, setup_paths, header_keys):
+def test_clean_and_parse_dates_success(
+    mocker: MockerFixture, sample_email_data, setup_paths, header_keys
+):
     """Test successful cleaning and parsing of dates."""
     # Create a sample CSV with realistic email data
-    initial_data = {
-        "Message-ID": ["<123@example.com>"],
-        "Date": ["Mon, 2 Jan 02 14:30:00 -0800 (PST)"],
-        "From": ["sender@example.com"],
-        "To": ["recipient@example.com"],
-        "Subject": ["Test Email"],
-        "Cc": [None],
-        "Bcc": [None],
-        "X-From": ["Sender Name"],
-        "X-To": ["Recipient Name"],
-        "X-Cc": [None],
-        "Body": ["Hello, this is a test."],
-    }
-    df = pd.DataFrame(initial_data)
+
+    df = pd.DataFrame(sample_email_data)
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
@@ -81,8 +61,8 @@ def test_clean_and_parse_dates_success(mocker: MockerFixture, setup_paths, heade
     for key in header_keys:
         assert key in processed_df.columns
         assert (
-            processed_df[key].iloc[0] == initial_data[key][0]
-            if initial_data[key][0] is not None
+            processed_df[key].iloc[0] == sample_email_data[key][0]
+            if sample_email_data[key][0] is not None
             else "nan"
         )
 
@@ -106,7 +86,7 @@ def test_clean_and_parse_dates_success(mocker: MockerFixture, setup_paths, heade
 
 
 def test_clean_and_parse_dates_invalid_date(
-    mocker: MockerFixture, setup_paths, header_keys
+    mocker: MockerFixture, setup_paths, header_keys, sample_email_data
 ):
     """Test handling of invalid date formats."""
     initial_data = {
@@ -115,11 +95,11 @@ def test_clean_and_parse_dates_invalid_date(
         "From": ["sender2@example.com"],
         "To": ["recipient2@example.com"],
         "Subject": ["Test 2"],
-        "Cc": [None],
-        "Bcc": [None],
+        "Cc": sample_email_data["Cc"],
+        "Bcc": sample_email_data["Bcc"],
         "X-From": ["Sender Two"],
         "X-To": ["Recipient Two"],
-        "X-Cc": [None],
+        "X-Cc": sample_email_data["X-Cc"],
         "Body": ["Test body."],
     }
     df = pd.DataFrame(initial_data)

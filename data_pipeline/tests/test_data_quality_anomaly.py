@@ -22,15 +22,6 @@ from data_quality_anomaly import (
 
 
 @pytest.fixture
-def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
-    return {
-        "log_path": str(tmp_path / "logs" / "test_data_anomaly_log.log"),
-        "logger_name": "test_data_anomaly_logger",
-    }
-
-
-@pytest.fixture
 def oauth_config():
     """Fixture for OAuth configuration."""
     return {

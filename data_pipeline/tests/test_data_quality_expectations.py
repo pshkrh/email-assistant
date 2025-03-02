@@ -5,7 +5,6 @@ Unit tests for the data_quality_expectations funtions.
 import os
 import sys
 import pandas as pd
-import pytest
 from pytest_mock import MockerFixture
 
 # Add scripts folder to sys.path
@@ -19,17 +18,6 @@ from data_quality_expectations import (
 )  # Assume file is named data_quality_expectations.py
 
 # pylint: enable=wrong-import-position
-
-
-@pytest.fixture
-def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
-    return {
-        "csv_path": str(tmp_path / "enron_emails.csv"),
-        "context_root_dir": str(tmp_path / "gx"),
-        "log_path": str(tmp_path / "logs" / "test_data_quality_log.log"),
-        "logger_name": "test_data_quality_logger",
-    }
 
 
 # pylint: disable=redefined-outer-name
@@ -84,6 +72,7 @@ def test_define_expectations_missing_csv(mocker: MockerFixture, setup_paths):
     mocker.patch("great_expectations.get_context", return_value=mock_context)
 
     result = define_expectations(
+        # pylint: disable=duplicate-code
         setup_paths["csv_path"],
         setup_paths["context_root_dir"],
         setup_paths["log_path"],
@@ -96,22 +85,9 @@ def test_define_expectations_missing_csv(mocker: MockerFixture, setup_paths):
     )
 
 
-def test_define_expectations_empty_csv(mocker: MockerFixture, setup_paths):
+def test_define_expectations_empty_csv(mocker: MockerFixture, setup_paths, empty_csv):
     """Test handling of an empty CSV."""
-    initial_data = {
-        "Message-ID": [],
-        "Date": [],
-        "From": [],
-        "To": [],
-        "Subject": [],
-        "Cc": [],
-        "Bcc": [],
-        "X-From": [],
-        "X-To": [],
-        "X-Cc": [],
-        "Body": [],
-    }
-    df = pd.DataFrame(initial_data)
+    df = pd.DataFrame(empty_csv)
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()

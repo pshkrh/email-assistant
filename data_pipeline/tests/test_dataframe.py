@@ -33,23 +33,6 @@ def setup_paths(tmp_path):
     }
 
 
-@pytest.fixture
-def header_keys():
-    """Fixture for HEADER_KEYS used in extract_email_data."""
-    return [
-        "Message-ID",
-        "Date",
-        "From",
-        "To",
-        "Subject",
-        "Cc",
-        "Bcc",
-        "X-From",
-        "X-To",
-        "X-Cc",
-    ]
-
-
 # pylint: disable=redefined-outer-name
 def test_extract_email_data_success(mocker: MockerFixture, tmp_path, header_keys):
     """Test successful extraction of email data."""
