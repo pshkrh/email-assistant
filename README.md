@@ -89,7 +89,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 2. **Check Python version** (3.11):
 
    ```bash
-   python --version
+    python --version
    ```
 
 3. **Install dependencies**:
