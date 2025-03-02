@@ -1,7 +1,11 @@
 numpy
 pandas
-os
-email
-tarfile
-warnings
-urllib.request
+great_expectations
+dvc[gs]
+pytest
+pytest-mock
+pytest-pylint
+apache-airflow[celery]==2.10.5 --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.8.txt"
+tqdm
+python-dotenv
+google-auth-oauthlib

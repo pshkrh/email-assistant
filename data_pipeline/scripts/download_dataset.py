@@ -1,36 +1,68 @@
+"""
+Module for downloading the Enron dataset.
+
+This script downloads the Enron dataset from a specified URL and saves it locally.
+It ensures logging and handles errors gracefully.
+"""
+
 import os
-import tarfile
-import urllib.request
 import warnings
-warnings.filterwarnings('ignore')
+import requests
+from tqdm import tqdm
 
-DATASET_URL = "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
+from create_logger import create_logger
+
+warnings.filterwarnings("ignore")
+
 DATA_DIR = "dataset"
-ARCHIVE_NAME = "enron_mail_20150507.tar.gz"
 
-# Download the Enron dataset from the given URL.
-def download_enron_dataset(url, save_path):
-    if not os.path.exists(save_path):
-        print("Downloading the Enron dataset...")
-        urllib.request.urlretrieve(url, save_path)
-        print("Download complete!")
-    else:
-        print("Dataset archive already exists, skipping download.")
 
-# Extract the Enron dataset.
-def extract_enron_dataset(archive_path, extract_to):
+def download_enron_dataset(url, save_path, path, logger_name):
+    """
+    Downloads the Enron dataset from a given URL and saves it locally.
 
-    if not os.path.exists(extract_to):
-        os.makedirs(extract_to)
+    Parameters:
+        url (str): URL of the dataset.
+        save_path (str): Path to save the downloaded file.
+        path (str): Path for logging.
+        logger_name (str): Name of the logger.
+    """
+    data_downloading_logger = create_logger(path, logger_name)
+    try:
+        chunk_size = 1024 * 1024
 
-    print("Extracting the dataset...")
-    with tarfile.open(archive_path, "r:gz") as tar:
-        tar.extractall(path=extract_to)
-    print(f"Extraction complete! Files are saved in '{extract_to}'")
+        # Check if dataset already exists
+        if os.path.exists(save_path):
+            data_downloading_logger.info(
+                "Dataset archive already exists, skipping download."
+            )
+            return None
+
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        data_downloading_logger.info("Downloading the Enron dataset...")
+
+        # Stream download
+        with requests.get(url, stream=True, timeout=30) as response:
+            response.raise_for_status()
+            total_size = int(response.headers.get("content-length", 0))
+            with open(save_path, "wb") as file, tqdm(
+                total=total_size, unit="B", unit_scale=True, desc="Downloading"
+            ) as progress_bar:
+                for chunk in response.iter_content(chunk_size):
+                    file.write(chunk)
+                    progress_bar.update(len(chunk))
+        data_downloading_logger.info("Dataset Downloaded Successfully at %s", save_path)
+        return save_path
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Error downloading dataset: {e}"
+        data_downloading_logger.error(error_message, exc_info=True)
+        return None
+
 
 if __name__ == "__main__":
-    # Step 1: Download dataset
-    download_enron_dataset(ENRON_URL, ARCHIVE_NAME)
+    DATASET_URL = "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
+    SAVE_PATH = "./data_pipeline/data/enron_mail_20150507.tar.gz"
+    PATH = "./data_pipeline/logs/data_downloading_log.log"
+    LOGGER_NAME = "data_downloading_logger"
 
-    # Step 2: Extract dataset
-    extract_enron_dataset(ARCHIVE_NAME, DATA_DIR)
+    download_enron_dataset(DATASET_URL, SAVE_PATH, PATH, LOGGER_NAME)
