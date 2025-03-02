@@ -105,9 +105,15 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    - In Terminal, at the root of the project i.e., email-assistant/, enter
 
    ```bash
-     - dvc init
-     - dvc remote add -d <desired_remote_name> gs://<your_bucket_name>
-     - dvc remote modify <created_desired_remote_name> credentialpath <credentials.json_path_relative_to_email_assitant/>
+     dvc init
+   ```
+
+   ```bash
+     dvc remote add -d <desired_remote_name> gs://<your_bucket_name>
+   ```
+
+   ```bash
+     dvc remote modify <created_desired_remote_name> credentialpath <your_credentials.json_path_relative_to_email_assitant/>
    ```
 
 5. **Run Airflow**:
@@ -126,9 +132,26 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
    - Create GMAIL API Oauth client and download its credential.json,
 
-     - Select Application as Desktop and give scope of GmailAPIService - https://mail.google.com/, Follow this (https://support.google.com/googleapi/answer/6158849?hl=en)
+     - Select Application as Desktop and give scope of GmailAPIService (https://mail.google.com/), Follow this (https://support.google.com/googleapi/answer/6158849?hl=en)
 
-     - Set these credentials as shown in .env file as shown in .env-sample file
+     - Download the credentials as json and set them in .env file as shown in .env-sample file, key=value without ""
+
+     - Code to generate refresh token, keep this file in root folder - email-assistant/gmail_refresh_token.py
+
+     ```bash
+      from google_auth_oauthlib.flow import InstalledAppFlow
+      import os
+      from dotenv import load_dotenv
+
+      SCOPES = ["https://mail.google.com/"]
+
+      flow = InstalledAppFlow.from_client_secrets_file("Path_To_Oauth_Client_credential.json", SCOPES)
+
+      creds = flow.run_local_server(port=0)
+
+      print("Refresh Token:", creds.refresh_token)
+
+     ```
 
      - You can skip creating GMAIL API Oauth client if you don't want to send email notifications, it will log error in anomaly task.
 
