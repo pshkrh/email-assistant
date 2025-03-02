@@ -182,7 +182,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
     password:airflow
    ```
 
-   - Run the DAG by clicking on the play button on the right side of the window once you see **data_pipeline_dag**.
+   - Run the DAG by clicking on the play button on the right side of the window once you see **datapipeline**.
 
    - Task performance can be time consuming depending on the resources provided to docker.
 
@@ -205,7 +205,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 9. **Tests** :
    - To run tests from root diectory email_assistant/
    ```bash
-   pytest data_pipeline/tests/*.py -v
+   pytest data_pipeline/tests/ -v
    ```
    - For individual tests replace \* with test file name from data_pipeline/tests/
 
