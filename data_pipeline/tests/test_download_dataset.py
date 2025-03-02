@@ -1,3 +1,7 @@
+"""
+Unit tests for the data_quality_validation funtions.
+"""
+
 import os
 import sys
 import requests
@@ -8,8 +12,11 @@ from pytest_mock import MockerFixture
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
-from download_dataset import download_enron_dataset, DATA_DIR
-from create_logger import createLogger
+# pylint: disable=wrong-import-position
+
+from download_dataset import download_enron_dataset
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -22,12 +29,13 @@ def setup_paths(tmp_path):
     }
 
 
+# pylint: disable=redefined-outer-name
 def test_download_success(mocker: MockerFixture, setup_paths):
     """Test if the dataset downloads successfully."""
-    mock_exists = mocker.patch("os.path.exists", return_value=False)
+    mocker.patch("os.path.exists", return_value=False)
     mock_makedirs = mocker.patch("download_dataset.os.makedirs")
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
     mock_response = mocker.MagicMock()
     mock_response.headers = {"content-length": "1024"}
     mock_response.iter_content.return_value = [b"data"] * 2
@@ -48,16 +56,16 @@ def test_download_success(mocker: MockerFixture, setup_paths):
     )
     mock_logger.info.assert_any_call("Downloading the Enron dataset...")
     mock_logger.info.assert_any_call(
-        f"Dataset Downloaded Successfully at {setup_paths['save_path']}"
+        "Dataset Downloaded Successfully at %s", setup_paths["save_path"]
     )
     mock_open.assert_called_once_with(setup_paths["save_path"], "wb")
 
 
 def test_file_exists(mocker: MockerFixture, setup_paths):
     """Test if function skips download when file already exists."""
-    mock_exists = mocker.patch("os.path.exists", return_value=True)
+    mocker.patch("os.path.exists", return_value=True)
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
 
     result = download_enron_dataset(
         "https://example.com",
@@ -75,9 +83,9 @@ def test_file_exists(mocker: MockerFixture, setup_paths):
 
 def test_empty_url(mocker: MockerFixture, setup_paths):
     """Test if function handles empty URL errors."""
-    mock_exists = mocker.patch("os.path.exists", return_value=False)
+    mocker.patch("os.path.exists", return_value=False)
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
 
     result = download_enron_dataset(
         "",
@@ -95,16 +103,16 @@ def test_empty_url(mocker: MockerFixture, setup_paths):
 
 def test_zero_content_length(mocker: MockerFixture, setup_paths):
     """Test if function handles zero content length."""
-    mock_exists = mocker.patch("os.path.exists", return_value=False)
-    mock_makedirs = mocker.patch("download_dataset.os.makedirs")
+    mocker.patch("os.path.exists", return_value=False)
+    mocker.patch("download_dataset.os.makedirs")
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
     mock_response = mocker.MagicMock()
     mock_response.headers = {"content-length": "0"}
     mock_response.iter_content.return_value = []
     mock_response.raise_for_status.return_value = None
     mocker.patch("requests.get", return_value=mock_response)
-    mock_open = mocker.patch("builtins.open", mocker.mock_open())
+    mocker.patch("builtins.open", mocker.mock_open())
     mock_tqdm = mocker.patch("download_dataset.tqdm", return_value=mocker.MagicMock())
 
     result = download_enron_dataset(
@@ -117,19 +125,19 @@ def test_zero_content_length(mocker: MockerFixture, setup_paths):
     assert result == setup_paths["save_path"]
     mock_logger.info.assert_any_call("Downloading the Enron dataset...")
     mock_logger.info.assert_any_call(
-        f"Dataset Downloaded Successfully at {setup_paths['save_path']}"
+        "Dataset Downloaded Successfully at %s", setup_paths["save_path"]
     )
     mock_tqdm.return_value.update.assert_not_called()
 
 
 def test_permission_denied(mocker: MockerFixture, setup_paths):
     """Test if function handles permission denied errors."""
-    mock_exists = mocker.patch("os.path.exists", return_value=False)
-    mock_makedirs = mocker.patch(
+    mocker.patch("os.path.exists", return_value=False)
+    mocker.patch(
         "download_dataset.os.makedirs", side_effect=PermissionError("Permission denied")
     )
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
 
     result = download_enron_dataset(
         "https://example.com",
@@ -146,9 +154,9 @@ def test_permission_denied(mocker: MockerFixture, setup_paths):
 
 def test_invalid_url(mocker: MockerFixture, setup_paths):
     """Test if function handles invalid URL errors."""
-    mock_exists = mocker.patch("os.path.exists", return_value=False)
+    mocker.patch("os.path.exists", return_value=False)
     mock_logger = mocker.MagicMock()
-    mocker.patch("download_dataset.createLogger", return_value=mock_logger)
+    mocker.patch("download_dataset.create_logger", return_value=mock_logger)
     mocker.patch(
         "requests.get",
         side_effect=requests.exceptions.MissingSchema("Invalid URL 'invalid-url'"),

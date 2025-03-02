@@ -1,3 +1,7 @@
+"""
+Unit tests for the data_quality_expectations funtions.
+"""
+
 import os
 import sys
 import pandas as pd
@@ -8,10 +12,13 @@ from pytest_mock import MockerFixture
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from data_quality_expectations import (
     define_expectations,
 )  # Assume file is named data_quality_expectations.py
-from create_logger import createLogger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -25,6 +32,7 @@ def setup_paths(tmp_path):
     }
 
 
+# pylint: disable=redefined-outer-name
 def test_define_expectations_success(mocker: MockerFixture, setup_paths):
     """Test successful definition of expectation suite."""
     # Create a sample CSV with realistic email data
@@ -45,7 +53,7 @@ def test_define_expectations_success(mocker: MockerFixture, setup_paths):
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_expectations.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_suite = mocker.MagicMock()
     mock_context.suites.add_or_update.return_value = mock_suite
@@ -70,7 +78,7 @@ def test_define_expectations_success(mocker: MockerFixture, setup_paths):
 def test_define_expectations_missing_csv(mocker: MockerFixture, setup_paths):
     """Test handling of missing CSV file."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_expectations.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mocker.patch("pandas.read_csv", side_effect=FileNotFoundError("No such file"))
     mock_context = mocker.MagicMock()
     mocker.patch("great_expectations.get_context", return_value=mock_context)
@@ -107,7 +115,7 @@ def test_define_expectations_empty_csv(mocker: MockerFixture, setup_paths):
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_expectations.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_suite = mocker.MagicMock()
     mock_context.suites.add_or_update.return_value = mock_suite
@@ -145,7 +153,7 @@ def test_define_expectations_anomalies(mocker: MockerFixture, setup_paths):
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_expectations.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_expectations.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_suite = mocker.MagicMock()
     mock_context.suites.add_or_update.return_value = mock_suite

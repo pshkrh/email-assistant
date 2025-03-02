@@ -1,7 +1,7 @@
 import pandas as pd
 import re
 
-from create_logger import createLogger
+from create_logger import create_logger
 
 
 # Function to classify emails as 'original', 'reply', or 'forward'
@@ -38,9 +38,9 @@ def clean_body(text):
     return " ".join(text.split())
 
 
-def data_clean(input_file, output_file, path, loggerName):
+def data_clean(input_file, output_file, path, logger_name):
 
-    data_cleaning_logger = createLogger(path, loggerName)
+    data_cleaning_logger = create_logger(path, logger_name)
 
     # Chunk size (adjust based on your memory capacity, e.g., 1000-5000 rows)
     chunk_size = 1000
@@ -130,5 +130,5 @@ if __name__ == "__main__":
     input_file = "./data_pipeline/data/enron_emails.csv"
     output_file = "./data_pipeline/data/processed_enron_emails_ver14.csv"
     path = "./data_pipeline/logs/data_clean_log.log"
-    loggerName = "data_cleaning_logger"
-    data_clean(input_file, output_file, path, loggerName)
+    logger_name = "data_cleaning_logger"
+    data_clean(input_file, output_file, path, logger_name)

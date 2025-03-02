@@ -1,3 +1,7 @@
+"""
+Unit tests for the data_quality_validation funtions.
+"""
+
 import os
 import sys
 import pandas as pd
@@ -9,10 +13,13 @@ from pytest_mock import MockerFixture
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from data_quality_validation import (
     validate_data,
-)  # Assume file is named data_quality_validation.py
-from create_logger import createLogger
+)
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -32,6 +39,7 @@ def mock_suite():
     return "mock_suite"
 
 
+# pylint: disable=redefined-outer-name
 def test_validate_data_success(mocker: MockerFixture, setup_paths, mock_suite):
     """Test successful validation of data."""
     # Create a sample CSV with realistic email data
@@ -52,15 +60,18 @@ def test_validate_data_success(mocker: MockerFixture, setup_paths, mock_suite):
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_validation.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_validation.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_validation_result = mocker.MagicMock()
 
     # Simplified mocking
     mocker.patch("great_expectations.get_context", return_value=mock_context)
-    mock_context.data_sources.add_pandas.return_value.add_dataframe_asset.return_value.add_batch_definition_whole_dataframe.return_value.get_batch.return_value = (
-        "mock_batch"
-    )
+
+    mock_data_source = mock_context.data_sources.add_pandas.return_value
+    mock_data_asset = mock_data_source.add_dataframe_asset.return_value
+    mock_batch_def = mock_data_asset.add_batch_definition_whole_dataframe.return_value
+    mock_batch_def.get_batch.return_value = "mock_batch"
+
     mocker.patch(
         "great_expectations.ValidationDefinition",
         return_value=mocker.MagicMock(
@@ -90,7 +101,7 @@ def test_validate_data_success(mocker: MockerFixture, setup_paths, mock_suite):
 def test_validate_data_missing_csv(mocker: MockerFixture, setup_paths, mock_suite):
     """Test handling of missing CSV file."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_validation.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_validation.create_logger", return_value=mock_logger)
     mocker.patch("pandas.read_csv", side_effect=FileNotFoundError("No such file"))
     mock_context = mocker.MagicMock()
     mocker.patch("great_expectations.get_context", return_value=mock_context)
@@ -128,15 +139,16 @@ def test_validate_data_empty_csv(mocker: MockerFixture, setup_paths, mock_suite)
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_validation.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_validation.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_validation_result = mocker.MagicMock()
 
     # Simplified chaining mocking
     mocker.patch("great_expectations.get_context", return_value=mock_context)
-    mock_context.data_sources.add_pandas.return_value.add_dataframe_asset.return_value.add_batch_definition_whole_dataframe.return_value.get_batch.return_value = (
-        "mock_batch"
-    )
+    mock_data_source = mock_context.data_sources.add_pandas.return_value
+    mock_data_asset = mock_data_source.add_dataframe_asset.return_value
+    mock_batch_def = mock_data_asset.add_batch_definition_whole_dataframe.return_value
+    mock_batch_def.get_batch.return_value = "mock_batch"
     mocker.patch(
         "great_expectations.ValidationDefinition",
         return_value=mocker.MagicMock(
@@ -186,7 +198,7 @@ def test_validate_data_validation_run_failure(
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_validation.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_validation.create_logger", return_value=mock_logger)
     mock_context = mocker.MagicMock()
     mock_data_source = mocker.MagicMock()
     mock_data_asset = mocker.MagicMock()

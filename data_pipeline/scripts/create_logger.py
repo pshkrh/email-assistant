@@ -1,9 +1,25 @@
+"""
+Module for creating and configuring a logger.
+
+This module provides the `createLogger` function to set up a logger 
+that writes logs to a specified file with a standard format.
+
+Usage:
+    logger = createLogger("logs/app.log", "app_logger")
+    logger.info("Application started")
+
+Functions:
+    createLogger(path, name):
+        Creates and returns a logger instance.
+
+"""
+
 import logging
 import time
 import os
 
 
-def createLogger(path, name):
+def create_logger(path, name):
     """
     Creates and configures a logger to write logs to a specified file.
 

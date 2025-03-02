@@ -1,32 +1,40 @@
+"""
+Module for defining data validation expectations using Great Expectations.
+
+This module sets up expectations for email datasets, ensuring data integrity
+and consistency in key columns like Message-ID, Date, From, To, and Body.
+
+Functions:
+    define_expectations(csv_path, context_root_dir, path, logger_name)
+"""
+
 import great_expectations as gx
 import pandas as pd
 
-from create_logger import createLogger
+from create_logger import create_logger
 
 
-def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
+def define_expectations(csv_path, context_root_dir, path, logger_name):
     """
     Defines data validation expectations for the dataset.
 
     Parameters:
-        CSV_PATH (str): Path to the dataset.
+        csv_path (str): Path to the dataset.
         context_root_dir (str): Root directory for Great Expectations context.
         path (str): Path for logging.
-        loggerName (str): Name of the logger.
+        logger_name (str): Name of the logger.
 
     Returns:
         gx.ExpectationSuite: Configured expectation suite.
     """
-    data_quality_logger = createLogger(path, loggerName)
+    data_quality_logger = create_logger(path, logger_name)
     context = gx.get_context(context_root_dir=context_root_dir)
     try:
-        data_quality_logger.info(f"Setting up Expectations in Suite")
+        data_quality_logger.info("Setting up Expectations in Suite")
 
-        df = pd.read_csv(CSV_PATH)
+        df = pd.read_csv(csv_path)
 
-        suite_name = "enron_expectation_suite"
-
-        suite = gx.ExpectationSuite(name=suite_name)
+        suite = gx.ExpectationSuite(name="enron_expectation_suite")
         suite = context.suites.add_or_update(suite)
 
         # Define schema expectations
@@ -37,10 +45,19 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
             )
 
         email_regex = {
-            "From": r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
-            "To": r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$",
-            "Cc": r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$",
-            "Bcc": r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$",
+            "From": (r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"),
+            "To": (
+                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+            ),
+            "Cc": (
+                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+            ),
+            "Bcc": (
+                r"^(?:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
+                r"(?:,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})*$"
+            ),
         }
         for column, regex in email_regex.items():
             suite.add_expectation(
@@ -66,13 +83,14 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
             )
         )
 
-        # Date Check [nan will be also in anamoly]
         suite.add_expectation(
             gx.expectations.ExpectColumnValuesToBeInSet(
                 column="Date",
-                value_set=pd.date_range("1980-01-01", pd.Timestamp.now(), freq="D")
-                .strftime("%Y-%m-%d")
-                .tolist(),
+                value_set=(
+                    pd.date_range("1980-01-01", pd.Timestamp.now(), freq="D")
+                    .strftime("%Y-%m-%d")
+                    .tolist()
+                ),
             )
         )
 
@@ -84,7 +102,11 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
 
         # Action Item Potential
         # Expect Body to contain actionable phrases/words for some emails
-        action_phrases = r"(?i)\bmeeting\b|\bplease\b|\bneed\b|\baction\b|\bdo\b|\bsend\b|\breview\b|\burgent\b|\basap\b|\brespond\b|\bconfirm\b|\bfollow-up\b|\bcomplete\b|\bcheck\b"
+        action_phrases = (
+            r"(?i)\bmeeting\b|\bplease\b|\bneed\b|\baction\b|\bdo\b|\bsend\b|"
+            r"\breview\b|\burgent\b|\basap\b|\brespond\b|\bconfirm\b|\bfollow-up\b|"
+            r"\bcomplete\b|\bcheck\b"
+        )
 
         suite.add_expectation(
             gx.expectations.ExpectColumnValuesToMatchRegex(
@@ -103,7 +125,9 @@ def define_expectations(CSV_PATH, context_root_dir, path, loggerName):
             )
         )
 
-        data_quality_logger.info(f"Created Expectation Suite successfully")
+        data_quality_logger.info("Created Expectation Suite successfully")
         return suite
-    except Exception as e:
-        data_quality_logger.error(f"Error in Expectations: {e}", exc_info=True)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Error in Expectations: {e}"
+        data_quality_logger.error(error_message, exc_info=True)
+        return None

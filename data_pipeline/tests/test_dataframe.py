@@ -1,7 +1,10 @@
+"""
+Unit tests for the data_quality_validation funtions.
+"""
+
 import os
 import sys
 import pandas as pd
-import email
 import pytest
 from pytest_mock import MockerFixture
 
@@ -9,11 +12,14 @@ from pytest_mock import MockerFixture
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from dataframe import (
     extract_email_data,
     process_enron_emails,
 )  # Assume file is named dataframe.py
-from create_logger import createLogger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -44,6 +50,7 @@ def header_keys():
     ]
 
 
+# pylint: disable=redefined-outer-name
 def test_extract_email_data_success(mocker: MockerFixture, tmp_path, header_keys):
     """Test successful extraction of email data."""
     email_path = str(tmp_path / "test_email.txt")
@@ -71,7 +78,7 @@ def test_process_emails_success(mocker: MockerFixture, setup_paths):
         f.write("From: person1@example.com\nSubject: Test\n\nHi there.")
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.createLogger", return_value=mock_logger)
+    mocker.patch("dataframe.create_logger", return_value=mock_logger)
     mocker.patch(
         "os.walk",
         return_value=[
@@ -108,7 +115,7 @@ def test_process_emails_with_real_data(mocker: MockerFixture, setup_paths):
     ), f"Real email directory not found at {real_data_dir}"
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.createLogger", return_value=mock_logger)
+    mocker.patch("dataframe.create_logger", return_value=mock_logger)
 
     result = process_enron_emails(
         real_data_dir,
@@ -132,7 +139,7 @@ def test_process_emails_with_real_data(mocker: MockerFixture, setup_paths):
 def test_process_emails_directory_not_found(mocker: MockerFixture, setup_paths):
     """Test handling of non-existent data directory."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.createLogger", return_value=mock_logger)
+    mocker.patch("dataframe.create_logger", return_value=mock_logger)
     mocker.patch("os.path.exists", return_value=False)
 
     result = process_enron_emails(
@@ -153,7 +160,7 @@ def test_process_emails_empty_directory(mocker: MockerFixture, setup_paths):
     """Test processing an empty directory."""
     os.makedirs(setup_paths["data_dir"], exist_ok=True)
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.createLogger", return_value=mock_logger)
+    mocker.patch("dataframe.create_logger", return_value=mock_logger)
     mocker.patch("os.walk", return_value=[(setup_paths["data_dir"], [], [])])
 
     result = process_enron_emails(

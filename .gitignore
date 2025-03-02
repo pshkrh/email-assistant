@@ -1,6 +1,7 @@
 .idea
 .DS_Store
 *.tar.gz
+!data_pipeline/tests/data/emails.tar.gz
 dataset/
 email_assistant/
 .python-version

@@ -1,3 +1,7 @@
+"""
+Unit tests for the clean_and_parse_dates funtion.
+"""
+
 import os
 import sys
 import pandas as pd
@@ -8,8 +12,11 @@ from pytest_mock import MockerFixture
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from clean_and_parse_dates import clean_and_parse_dates
-from create_logger import createLogger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -38,6 +45,7 @@ def header_keys():
     ]
 
 
+# pylint: disable=redefined-outer-name
 def test_clean_and_parse_dates_success(mocker: MockerFixture, setup_paths, header_keys):
     """Test successful cleaning and parsing of dates."""
     # Create a sample CSV with realistic email data
@@ -58,7 +66,7 @@ def test_clean_and_parse_dates_success(mocker: MockerFixture, setup_paths, heade
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("clean_and_parse_dates.createLogger", return_value=mock_logger)
+    mocker.patch("clean_and_parse_dates.create_logger", return_value=mock_logger)
 
     result = clean_and_parse_dates(
         setup_paths["csv_path"],
@@ -118,7 +126,7 @@ def test_clean_and_parse_dates_invalid_date(
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("clean_and_parse_dates.createLogger", return_value=mock_logger)
+    mocker.patch("clean_and_parse_dates.create_logger", return_value=mock_logger)
 
     result = clean_and_parse_dates(
         setup_paths["csv_path"],
@@ -149,7 +157,7 @@ def test_clean_and_parse_dates_invalid_date(
 def test_clean_and_parse_dates_missing_csv(mocker: MockerFixture, setup_paths):
     """Test handling of missing CSV file."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("clean_and_parse_dates.createLogger", return_value=mock_logger)
+    mocker.patch("clean_and_parse_dates.create_logger", return_value=mock_logger)
     mocker.patch("pandas.read_csv", side_effect=FileNotFoundError("No such file"))
 
     result = clean_and_parse_dates(
@@ -173,7 +181,7 @@ def test_clean_and_parse_dates_empty_csv(
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("clean_and_parse_dates.createLogger", return_value=mock_logger)
+    mocker.patch("clean_and_parse_dates.create_logger", return_value=mock_logger)
 
     result = clean_and_parse_dates(
         setup_paths["csv_path"],
@@ -218,7 +226,7 @@ def test_clean_and_parse_dates_multiple_emails(
     df.to_csv(setup_paths["csv_path"], index=False)
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("clean_and_parse_dates.createLogger", return_value=mock_logger)
+    mocker.patch("clean_and_parse_dates.create_logger", return_value=mock_logger)
 
     result = clean_and_parse_dates(
         setup_paths["csv_path"],

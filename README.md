@@ -292,17 +292,17 @@ MailMate's pipeline consists of several stages to ensure clean, structured, and 
 **To run Pylint with Pytest for an integrated quality check:**
 
 ```bash
-pytest --pylint
+pytest data_pipeline/ --pylint -v
 ```
 
 **To test specific modules, use from root directory:**
 
 ```bash
-pytest data_pipeline/tests/<test_filename.py> -v
+pytest data_pipeline/tests/<test_filename.py> --pylint -v
 
 Like:
 
-pytest data_pipeline/tests/test_download_dataset.py -v
+pytest data_pipeline/tests/test_download_dataset.py --pylint -v
 ```
 
 **To run all tests, from root directory run:**
@@ -325,7 +325,4 @@ For questions or collaboration:
 - Open an issue on this GitHub repo.
 - Or reach out to any of the team members directly.
 
----
-
-m
 ---

@@ -1,20 +1,28 @@
+"""
+Unit tests for the data_quality_setup funtions.
+"""
+
 import os
 import sys
+import warnings
 import pytest
 import pandas as pd
 from pytest_mock import MockerFixture
-import warnings
 
 warnings.simplefilter("always")
+
 
 # Add scripts folder to sys.path
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from data_quality_setup import (
     setup_gx_context_and_logger,
 )  # Assume the file is named data_quality_setup.py
-from create_logger import createLogger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -27,10 +35,11 @@ def setup_paths(tmp_path):
     }
 
 
+# pylint: disable=redefined-outer-name
 def test_setup_gx_context_and_logger_success(mocker: MockerFixture, setup_paths):
     """Test successful setup of Great Expectations context and logger."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_setup.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mock_makedirs = mocker.patch("os.makedirs")
     mock_context = mocker.MagicMock()
     mocker.patch("great_expectations.get_context", return_value=mock_context)
@@ -56,7 +65,7 @@ def test_setup_gx_context_and_logger_dir_creation_failure(
 ):
     """Test failure in directory creation."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_setup.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mocker.patch("os.makedirs", side_effect=PermissionError("Permission denied"))
 
     result = setup_gx_context_and_logger(
@@ -76,7 +85,7 @@ def test_setup_gx_context_and_logger_gx_context_failure(
 ):
     """Test failure in Great Expectations context creation."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_setup.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mocker.patch("os.makedirs")
     mocker.patch(
         "great_expectations.get_context", side_effect=Exception("GX context error")
@@ -97,7 +106,7 @@ def test_setup_gx_context_and_logger_gx_context_failure(
 def test_setup_gx_context_and_logger_existing_dir(mocker: MockerFixture, setup_paths):
     """Test setup when the context directory already exists."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_setup.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mock_makedirs = mocker.patch("os.makedirs")
     mock_context = mocker.MagicMock()
     mocker.patch("great_expectations.get_context", return_value=mock_context)
@@ -124,7 +133,7 @@ def test_full_pipeline_placeholder(mocker: MockerFixture, setup_paths, tmp_path)
     """Placeholder test for the full pipeline - requires external scripts."""
     # Mock setup
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_setup.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mocker.patch("os.makedirs")
     mock_context = mocker.MagicMock()
     mocker.patch("great_expectations.get_context", return_value=mock_context)
@@ -150,9 +159,6 @@ def test_full_pipeline_placeholder(mocker: MockerFixture, setup_paths, tmp_path)
             "Body": ["Hello"],
         }
     ).to_csv(csv_path, index=False)
-
-    # Run the pipeline
-    from data_quality_setup import setup_gx_context_and_logger
 
     context_root_dir = setup_gx_context_and_logger(
         setup_paths["context_root_dir"],

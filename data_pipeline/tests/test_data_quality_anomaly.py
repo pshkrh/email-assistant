@@ -1,3 +1,7 @@
+"""
+Unit tests for the data_quality_anomaly funtions.
+"""
+
 import os
 import sys
 from pytest_mock import MockerFixture
@@ -7,11 +11,14 @@ import pytest
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
+# pylint: disable=wrong-import-position
+
 from data_quality_anomaly import (
     send_email_notification,
     handle_anomalies,
 )  # Adjusted to corrected filename
-from create_logger import createLogger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -40,6 +47,7 @@ def mock_logger(mocker):
     return mocker.MagicMock()
 
 
+# pylint: disable=redefined-outer-name
 # Tests for send_email_notification
 def test_send_email_notification_success_already_valid(
     mocker: MockerFixture, oauth_config, mock_logger
@@ -180,7 +188,7 @@ def test_send_email_notification_smtp_failure(
 def test_handle_anomalies_with_anomalies(mocker: MockerFixture, setup_paths):
     """Test handling anomalies with detected issues."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_anomaly.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_anomaly.create_logger", return_value=mock_logger)
     mocker.patch("data_quality_anomaly.send_email_notification", return_value=True)
 
     validation_results = {
@@ -224,7 +232,7 @@ def test_handle_anomalies_with_anomalies(mocker: MockerFixture, setup_paths):
 def test_handle_anomalies_no_anomalies(mocker: MockerFixture, setup_paths):
     """Test handling when no anomalies are detected."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_anomaly.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_anomaly.create_logger", return_value=mock_logger)
 
     validation_results = {
         "results": [
@@ -251,7 +259,7 @@ def test_handle_anomalies_no_anomalies(mocker: MockerFixture, setup_paths):
 def test_handle_anomalies_logger_failure(mocker: MockerFixture, setup_paths):
     """Test handling logger creation failure."""
     mocker.patch(
-        "data_quality_anomaly.createLogger",
+        "data_quality_anomaly.create_logger",
         side_effect=Exception("Logger creation failed"),
     )
     validation_results = {"results": []}
@@ -265,7 +273,7 @@ def test_handle_anomalies_logger_failure(mocker: MockerFixture, setup_paths):
 def test_handle_anomalies_for_email_failure(mocker: MockerFixture, setup_paths):
     """Test handling email sending failure."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_anomaly.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_anomaly.create_logger", return_value=mock_logger)
     mocker.patch("data_quality_anomaly.send_email_notification", return_value=False)
 
     validation_results = {
@@ -303,7 +311,7 @@ def test_handle_anomalies_for_email_failure(mocker: MockerFixture, setup_paths):
 def test_handle_anomalies_email_exception(mocker: MockerFixture, setup_paths):
     """Test handling when email sending raises an exception."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("data_quality_anomaly.createLogger", return_value=mock_logger)
+    mocker.patch("data_quality_anomaly.create_logger", return_value=mock_logger)
     mocker.patch(
         "data_quality_anomaly.send_email_notification",
         side_effect=Exception("Email send failed"),

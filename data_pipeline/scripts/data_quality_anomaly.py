@@ -1,10 +1,29 @@
+"""
+Module for handling data anomalies and sending notifications.
+
+This module includes:
+- `send_email_notification`: Sends email alerts using OAuth2 authentication.
+- `handle_anomalies`: Logs detected anomalies and sends alerts if necessary.
+
+Usage:
+    Call `handle_anomalies` after validation to log and notify anomalies.
+
+Functions:
+    send_email_notification(subject, body, to_email, oauth_config, logger):
+        Sends an email alert about detected anomalies.
+    
+    handle_anomalies(validation_results, path, logger_name):
+        Logs anomalies and triggers email alerts when required.
+
+"""
+
 import smtplib
 from email.mime.text import MIMEText
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from create_logger import createLogger
 import base64
 import os
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from create_logger import create_logger
 from dotenv import load_dotenv
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -40,12 +59,12 @@ def send_email_notification(subject, body, to_email, oauth_config, data_anomaly_
             if creds.refresh_token:
                 creds.refresh(Request())
             else:
-                data_anomaly_logger.error(f"No valid token or refresh token available")
+                data_anomaly_logger.error("No valid token or refresh token available")
                 return False
 
         if not creds.valid or creds.token is None:
             data_anomaly_logger.error(
-                f"OAuth token remains invalid after refresh attempt"
+                "OAuth token remains invalid after refresh attempt"
             )
             return False
 
@@ -59,26 +78,27 @@ def send_email_notification(subject, body, to_email, oauth_config, data_anomaly_
             auth_string = (
                 f"user={oauth_config['sender_email']}\1auth=Bearer {creds.token}\1\1"
             )
-            auth_response = server.docmd(
+            server.docmd(
                 "AUTH", "XOAUTH2 " + base64.b64encode(auth_string.encode()).decode()
             )
             server.send_message(msg)
         return True
-    except Exception as e:
-        data_anomaly_logger.error(f"Failed to send email: {e}", exc_info=True)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Failed to send email: {e}"
+        data_anomaly_logger.error(error_message, exc_info=True)
         return False
 
 
-def handle_anomalies(validation_results, path, loggerName):
+def handle_anomalies(validation_results, path, logger_name):
     """
     Handles detected anomalies by logging details and sending email notifications.
 
     Parameters:
         validation_results (dict): Validation results containing anomaly details.
         path (str): Path for logging.
-        loggerName (str): Name of the logger.
+        logger_name (str): Name of the logger.
     """
-    data_anomaly_logger = createLogger(path, loggerName)
+    data_anomaly_logger = create_logger(path, logger_name)
     try:
         anomalies = [
             result for result in validation_results["results"] if not result["success"]
@@ -89,15 +109,21 @@ def handle_anomalies(validation_results, path, loggerName):
 
             # Log detected anomalies
             for anomaly in anomalies:
-                expectation_type = anomaly["expectation_config"]["type"]
-                column_name = anomaly["expectation_config"]["kwargs"]["column"]
-                indexes = anomaly["result"].get("partial_unexpected_index_list", [])
-                unexpected_count = anomaly["result"].get("unexpected_count")
-                unexpected_percent = anomaly["result"].get("unexpected_percent")
+                anomaly_info = {
+                    "column": anomaly["expectation_config"]["kwargs"]["column"],
+                    "expectation": anomaly["expectation_config"]["type"],
+                    "unexpected_count": anomaly["result"].get("unexpected_count"),
+                    "unexpected_percent": anomaly["result"].get("unexpected_percent"),
+                    "partial_indexes": anomaly["result"].get(
+                        "partial_unexpected_index_list", []
+                    ),
+                }
                 detail = (
-                    f"Column: {column_name}, Expectation: {expectation_type}, "
-                    f"Unexpected Count: {unexpected_count}, Unexpected Percent: {unexpected_percent}, "
-                    f"Partial Indexes: {indexes}"
+                    f"Column: {anomaly_info['column']}, "
+                    f"Expectation: {anomaly_info['expectation']}, "
+                    f"Unexpected Count: {anomaly_info['unexpected_count']}, "
+                    f"Unexpected Percent: {anomaly_info['unexpected_percent']}, "
+                    f"Partial Indexes: {anomaly_info['partial_indexes']}"
                 )
                 data_anomaly_logger.info(detail)
                 anomaly_details.append(detail)
@@ -121,10 +147,11 @@ def handle_anomalies(validation_results, path, loggerName):
                 data_anomaly_logger=data_anomaly_logger,
             )
             if not is_email_sent:
-                data_anomaly_logger.error(f"Email Sending Unsuccessful....")
+                data_anomaly_logger.error("Email Sending Unsuccessful....")
                 return
             data_anomaly_logger.info("Email notification sent successfully.")
         else:
             data_anomaly_logger.info("No anomalies detected.")
-    except Exception as e:
-        data_anomaly_logger.error(f"Error in Anomaly Handling: {e}", exc_info=True)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Error in Anomaly Handling: {e}"
+        data_anomaly_logger.error(error_message, exc_info=True)

@@ -1,7 +1,10 @@
+"""
+Unit tests for the create_logger funtion.
+"""
+
 import os
 import sys
 import logging
-import time
 from pytest_mock import MockerFixture
 import pytest
 
@@ -9,7 +12,11 @@ import pytest
 scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scripts"))
 sys.path.append(scripts_folder)
 
-from create_logger import createLogger
+# pylint: disable=wrong-import-position
+
+from create_logger import create_logger
+
+# pylint: enable=wrong-import-position
 
 
 @pytest.fixture
@@ -26,9 +33,10 @@ def reset_logging():
     logging.getLogger("logger2").handlers = []
 
 
+# pylint: disable=redefined-outer-name
 def test_create_logger_success(temp_log_path):
     """Test successful creation of a logger with correct configuration."""
-    logger = createLogger(temp_log_path, "test_logger")
+    logger = create_logger(temp_log_path, "test_logger")
 
     # Verify logger properties
     assert isinstance(logger, logging.Logger)
@@ -44,12 +52,16 @@ def test_create_logger_success(temp_log_path):
     # Verify formatter
     formatter = handler.formatter
     assert isinstance(formatter, logging.Formatter)
-    assert formatter._fmt == "%(asctime)s - %(levelname)s - %(message)s"
-    assert formatter.converter == time.localtime
+    log_output = formatter.format(
+        logging.LogRecord("", logging.DEBUG, "", 0, "Test", None, None)
+    )
+    assert "DEBUG - Test" in log_output
+
+    assert callable(formatter.converter)
 
     # Test logging
     logger.debug("Test message")
-    with open(temp_log_path, "r") as f:
+    with open(temp_log_path, "r", encoding="utf-8") as f:
         log_content = f.read()
         assert "DEBUG - Test message" in log_content
 
@@ -62,7 +74,7 @@ def test_create_logger_directory_creation(mocker: MockerFixture, temp_log_path):
     # Mock FileHandler to avoid file creation
     mock_file_handler = mocker.patch("logging.FileHandler")
 
-    logger = createLogger(temp_log_path, "test_logger")
+    logger = create_logger(temp_log_path, "test_logger")
 
     # Verify directory creation was attempted
     mock_makedirs.assert_called_once_with(os.path.dirname(temp_log_path), exist_ok=True)
@@ -77,13 +89,13 @@ def test_create_logger_existing_directory(temp_log_path):
     # Ensure directory exists
     os.makedirs(os.path.dirname(temp_log_path), exist_ok=True)
 
-    logger = createLogger(temp_log_path, "test_logger")
+    logger = create_logger(temp_log_path, "test_logger")
 
     # Verify logger works with pre-existing directory
     assert logger.name == "test_logger"
     assert len(logger.handlers) == 1
     logger.debug("Existing dir test")
-    with open(temp_log_path, "r") as f:
+    with open(temp_log_path, "r", encoding="utf-8") as f:
         assert "Existing dir test" in f.read()
 
 
@@ -92,7 +104,7 @@ def test_create_logger_permission_denied(mocker: MockerFixture, temp_log_path):
     mocker.patch("os.makedirs", side_effect=PermissionError("Permission denied"))
 
     with pytest.raises(PermissionError, match="Permission denied"):
-        createLogger(temp_log_path, "test_logger")
+        create_logger(temp_log_path, "test_logger")
 
 
 def test_create_logger_file_creation_failure(mocker: MockerFixture, temp_log_path):
@@ -100,21 +112,21 @@ def test_create_logger_file_creation_failure(mocker: MockerFixture, temp_log_pat
     mocker.patch("logging.FileHandler", side_effect=OSError("File creation failed"))
 
     with pytest.raises(OSError, match="File creation failed"):
-        createLogger(temp_log_path, "test_logger")
+        create_logger(temp_log_path, "test_logger")
 
 
 def test_create_logger_multiple_calls_same_name(temp_log_path):
     """Test creating multiple loggers with the same name adds handlers."""
-    logger1 = createLogger(temp_log_path, "test_logger")
-    logger2 = createLogger(temp_log_path, "test_logger")
+    logger1 = create_logger(temp_log_path, "test_logger")
+    logger2 = create_logger(temp_log_path, "test_logger")
 
     # Verify they're the same logger instance
     assert logger1 is logger2
-    # Expect 2 handlers since createLogger adds a new one each call
+    # Expect 2 handlers since create_logger adds a new one each call
     assert len(logger1.handlers) == 2
     logger1.debug("First message")
     logger2.debug("Second message")
-    with open(temp_log_path, "r") as f:
+    with open(temp_log_path, "r", encoding="utf-8") as f:
         log_content = f.read()
         assert "First message" in log_content
         assert "Second message" in log_content
@@ -122,8 +134,8 @@ def test_create_logger_multiple_calls_same_name(temp_log_path):
 
 def test_create_logger_different_names(temp_log_path):
     """Test creating loggers with different names."""
-    logger1 = createLogger(temp_log_path, "logger1")
-    logger2 = createLogger(f"{temp_log_path}_2", "logger2")
+    logger1 = create_logger(temp_log_path, "logger1")
+    logger2 = create_logger(f"{temp_log_path}_2", "logger2")
 
     # Verify they're different loggers
     assert logger1 is not logger2
