@@ -112,7 +112,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
 5. **Run Airflow**:
 
-   - Enter the following to your terminal from root_directory i.e., email_assistant/
+   - Enter the following to your terminal from root_directory i.e., email-assistant/
 
    ```bash
    echo -e "AIRFLOW_UID=$(id -u)" > .env
@@ -171,7 +171,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
 8. **Store Data**:
 
-   - From root email_assistant/
+   - From root email-assistant/
 
    ```bash
    dvc add data_pipeline/data/enron_emails.csv
