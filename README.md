@@ -180,7 +180,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    - Use dvc push to store it to your GCP bucket.
 
 9. **Tests** :
-   - To run tests from root diectory email_assistan/
+   - To run tests from root diectory email_assistant/
    ```bash
    pytest data_pipeline/tests/*.py -v
    ```
