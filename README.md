@@ -4,7 +4,7 @@
 
 - [Shubh Desai](https://github.com/username)
 - [Pushkar Kurhekar](https://github.com/username)
-- [Aalap Desai](https://github.com/username)
+- [Aalap Desai](https://github.com/desaiaalap)
 - [Deep Prajapati](https://github.com/username)
 - [Shubham Mendapara](https://github.com/username)
 
