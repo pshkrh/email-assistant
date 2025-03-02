@@ -69,14 +69,6 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
 
 ---
 
-## Project Scope
-
-The detailed project report is available in the repository. You can access it using the link below:
-
-Alternatively, if viewing from GitHub, you can navigate to the **report/** folder and open `report.pdf` manually.
-
----
-
 # Installation & Prerequisites
 
 ### Prerequisites
@@ -90,8 +82,8 @@ Alternatively, if viewing from GitHub, you can navigate to the **report/** folde
 1. **Clone** the repository:
 
    ```bash
-   git clone https://github.com/pshkrh/mlops-project.git
-   cd mlops-project
+   git clone https://github.com/pshkrh/email-assistant.git
+   cd email-assistant
    ```
 
 2. **Check Python version** (3.11):
