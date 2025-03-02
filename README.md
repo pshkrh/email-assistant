@@ -103,9 +103,12 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    - Create a Google Cloud Storage Bucket, follow this (https://www.mlwithramin.com/blog/dvc-lab1)
    - Save the credentials.json file at your desired location
    - In Terminal, at the root of the project i.e., email-assistant/, enter
+
+   ```bash
      - dvc init
      - dvc remote add -d <desired_remote_name> gs://<your_bucket_name>
      - dvc remote modify <created_desired_remote_name> credentialpath <credentials.json_path_relative_to_email_assitant/>
+   ```
 
 5. **Run Airflow**:
 
@@ -166,7 +169,17 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    docker compose down
    ```
 
-8. **Tests** :
+8. **Store Data**:
+
+   - From root email_assistant/
+
+   ```bash
+   dvc add data_pipeline/data/enron_emails.csv
+   ```
+
+   - Use dvc push to store it to your GCP bucket.
+
+9. **Tests** :
    - To run tests from root diectory email_assistan/
    ```bash
    pytest data_pipeline/tests/*.py -v

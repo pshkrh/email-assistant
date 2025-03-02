@@ -1,12 +1,7 @@
 numpy
 pandas
-os
-email
-tarfile
-warnings
-urllib.request
 great_expectations
-'dvc[gs]'
+dvc[gs]
 pytest
 pytest-mock
 pytest-pylint
