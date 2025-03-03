@@ -130,7 +130,7 @@ The dataset is **cleaned, preprocessed, and structured** to remove redundant met
    AIRFLOW_UID=50000
    ```
 
-   - Create GMAIL API Oauth client and download its credential.json,
+   - Create GMAIL API Oauth client and download its credential.json (Note: To replicate we need to add your email address to test user so first please contact us to add you as a user),
 
      - Select Application as Desktop and give scope of GmailAPIService (https://mail.google.com/), Follow this (https://support.google.com/googleapi/answer/6158849?hl=en)
 
