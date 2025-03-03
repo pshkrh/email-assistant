@@ -3,10 +3,10 @@ name: Run Tests
 on:
   push:
     branches:
-      - shubh_desai
+      - main
   pull_request:
     branches:
-      - shubh_desai
+      - main
 
 jobs:
   test:
