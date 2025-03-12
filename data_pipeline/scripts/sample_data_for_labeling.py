@@ -25,7 +25,7 @@ def filter_emails(df):
     print(f"Filtered {len(df_filtered)} emails containing action-related keywords.")
     return df_filtered
 
-def sample_emails(df_filtered, sample_size=5000):
+def sample_emails(df_filtered, sample_size=50):
     """Samples a subset of emails for labeling."""
     df_sample = df_filtered.sample(n=sample_size, random_state=42) if len(df_filtered) > sample_size else df_filtered
     print(f"Sampled {len(df_sample)} emails for labeling.")
