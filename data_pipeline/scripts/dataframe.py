@@ -15,6 +15,7 @@ import email
 import pandas as pd
 
 from create_logger import create_logger
+from get_project_root import project_root
 
 
 # Extracts metadata and full email body from an email file.
@@ -65,13 +66,13 @@ def extract_email_data(email_path, data_preprocessing_logger, header_keys):
 
 
 # Loop through all folders and extract emails into a DataFrame.
-def process_enron_emails(data_dir, path, logger_name, csv_path):
+def process_enron_emails(data_dir, log_path, logger_name, csv_path):
     """
     Processes all email files in the dataset and extracts relevant information.
 
     Parameters:
         data_dir (str): Directory containing email files.
-        path (str): Path for logging.
+        log_path (str): Path for logging.
         logger_name (str): Name of the logger.
         csv_path (str): Path to save the processed emails as CSV.
 
@@ -94,7 +95,7 @@ def process_enron_emails(data_dir, path, logger_name, csv_path):
         email_list = []
         total_files = 0
 
-        data_preprocessing_logger = create_logger(path, logger_name)
+        data_preprocessing_logger = create_logger(log_path, logger_name)
 
         if not os.path.exists(data_dir):
             # pylint: disable=logging-fstring-interpolation
@@ -143,13 +144,16 @@ def process_enron_emails(data_dir, path, logger_name, csv_path):
 
 
 if __name__ == "__main__":
+
+    PROJECT_ROOT_DIR = project_root()
+
     # Path to the extracted dataset
-    MAILDIR_PATH = "./data_pipeline/data/dataset/maildir"
+    MAILDIR_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/dataset/maildir"
 
-    CSV_PATH = "./data_pipeline/data/enron_emails.csv"
+    CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
 
-    PATH = "./data_pipeline/logs/data_preprocessing_log.log"
+    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_preprocessing_log.log"
     LOGGER_NAME = "data_preprocessing_logger"
 
     # Process all emails
-    df_enron = process_enron_emails(MAILDIR_PATH, PATH, LOGGER_NAME, CSV_PATH)
+    df_enron = process_enron_emails(MAILDIR_PATH, LOG_PATH, LOGGER_NAME, CSV_PATH)

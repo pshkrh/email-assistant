@@ -5,7 +5,7 @@ This module sets up expectations for email datasets, ensuring data integrity
 and consistency in key columns like Message-ID, Date, From, To, and Body.
 
 Functions:
-    define_expectations(csv_path, context_root_dir, path, logger_name)
+    define_expectations(csv_path, context_root_dir, log_path, logger_name)
 """
 
 import great_expectations as gx
@@ -14,20 +14,20 @@ import pandas as pd
 from create_logger import create_logger
 
 
-def define_expectations(csv_path, context_root_dir, path, logger_name):
+def define_expectations(csv_path, context_root_dir, log_path, logger_name):
     """
     Defines data validation expectations for the dataset.
 
     Parameters:
         csv_path (str): Path to the dataset.
         context_root_dir (str): Root directory for Great Expectations context.
-        path (str): Path for logging.
+        log_path (str): Path for logging.
         logger_name (str): Name of the logger.
 
     Returns:
         gx.ExpectationSuite: Configured expectation suite.
     """
-    data_quality_logger = create_logger(path, logger_name)
+    data_quality_logger = create_logger(log_path, logger_name)
     context = gx.get_context(context_root_dir=context_root_dir)
     try:
         data_quality_logger.info("Setting up Expectations in Suite")
