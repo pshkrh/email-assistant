@@ -2,15 +2,15 @@
 .DS_Store
 *.tar.gz
 !data_pipeline/tests/data/emails.tar.gz
-dataset/
+data_pipeline/data/dataset/
 email_assistant/
 .python-version
 email1/
 .pytest_cache/
 .env
-mail_mate_credentials.json
+email-assistant.json
+.mail_mate_credentials.json
 profile.out
-data_pipeline/data/dataset/
 data_pipeline/gx/
 data_pipeline/logs/*.log
 data_pipeline/scripts/__pycache__/
@@ -23,3 +23,4 @@ dags/data_pipeline/gx/
 logs/*
 data_pipeline/tests/data/true_csv/*
 .dvc/
+venv/

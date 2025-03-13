@@ -9,3 +9,6 @@ apache-airflow[celery]==2.10.5 --constraint "https://raw.githubusercontent.com/a
 tqdm
 python-dotenv
 google-auth-oauthlib
+requests
+pyyaml
+jinja2
