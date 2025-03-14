@@ -14,4 +14,4 @@ flask
 flask_cors
 mlflow
 jinja2
-vertaxai
+vertexai
