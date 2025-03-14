@@ -1,5 +1,6 @@
 # model_pipeline/main.py
-from data_loader import load_enron_data, fetch_gmail_thread
+from data_loader import load_enron_data
+from fetch_gmail_threads import process_thread
 from llm_generator import process_email_body
 from llm_ranker import rank_all_outputs
 from output_verifier import verify_all_outputs
@@ -12,10 +13,10 @@ import mlflow
 def process_emails(data_source="enron", email=None, thread_id=None):
     """Process emails from Enron or Gmail with MLflow tracking."""
     if data_source == "enron":
-        df = load_enron_data()
+        df = load_enron_data()  # Create this file
         data_iter = df.iterrows()
     elif data_source == "gmail" and email and thread_id:
-        messages = fetch_gmail_thread(email, thread_id)
+        messages = process_thread(email, thread_id)
         data_iter = enumerate(messages)
     else:
         raise ValueError("Invalid data source or missing parameters")

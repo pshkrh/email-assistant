@@ -13,3 +13,5 @@ google-api-python-client
 flask
 flask_cors
 mlflow
+jinja2
+vertaxai

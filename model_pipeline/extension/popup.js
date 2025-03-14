@@ -65,7 +65,7 @@ document.getElementById("fetchButton").addEventListener("click", () => {
 
         logger.log(`Thread ID: ${threadId}, Email: ${email}`);
 
-        fetch("http://localhost:8000/process_thread", {
+        fetch("http://localhost:8000/fetch_gmail_thread", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ threadId, email }),
@@ -100,11 +100,11 @@ function formatThreadData(data) {
   let output = `Thread ID: ${data.threadId}\n\n`;
   data.messages.forEach((msg, index) => {
     output += `Message ${index + 1}:\n`;
-    output += `  From: ${msg.from}\n`;
-    output += `  To: ${msg.to}\n`;
-    output += `  Subject: ${msg.subject}\n`;
-    output += `  Date: ${msg.date}\n`;
-    output += `  Body: ${msg.body.slice(0, 100)}...\n\n`;
+    output += `  From: ${msg.From}\n`;
+    output += `  To: ${msg.To}\n`;
+    output += `  Subject: ${msg.Subject}\n`;
+    output += `  Date: ${msg.Date}\n`;
+    output += `  Body: ${msg.Body.slice(0, 100)}...\n\n`;
   });
   return output;
 }

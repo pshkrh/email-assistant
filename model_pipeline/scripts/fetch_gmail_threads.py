@@ -15,18 +15,18 @@ logging.basicConfig(level=logging.DEBUG)
 # CORS(
 #     app,
 #     resources={
-#         r"/process_thread": {
+#         r"/fetch_gmail_thread": {
 #             "origins": "chrome-extension://aelnladbenlanifdljmagnljckohcohe"
 #         }
 #     },
 # )
 # CORS(app)
-CORS(app, resources={r"/process_thread": {"origins": "chrome-extension://*"}})
+CORS(app, resources={r"/fetch_gmail_thread": {"origins": "chrome-extension://*"}})
 
 PROJECT_ROOT_DIR = project_root()
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CREDENTIALS_FILE = (
-    f"{PROJECT_ROOT_DIR}/model_pipeline/credentials/MailMateCredentials.json"
+    f"{PROJECT_ROOT_DIR}/model_pipeline/credentials/MailMateCredential.json"
 )
 TOKEN_DIR = f"{PROJECT_ROOT_DIR}/model_pipeline/credentials/user_tokens"
 
@@ -53,52 +53,64 @@ def authenticate_gmail(email):
     return build("gmail", "v1", credentials=creds)
 
 
-@app.route("/process_thread", methods=["POST"])
-def process_thread():
+def process_thread(email, thread_id):
+    if not thread_id or not email:
+        return Exception(status_code=400, detail="Missing thread ID or email")
+
+    service = authenticate_gmail(email)
+    thread_data = service.users().threads().get(userId="me", id=thread_id).execute()
+
+    thread = thread_data.get("messages", [])[-1]
+    messages = []
+    payload = thread["payload"]
+    headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+
+    body = None
+    if "parts" in payload:
+        for part in payload["parts"]:
+            if part["mimeType"] == "text/plain":
+                body = base64.urlsafe_b64decode(part["body"]["data"]).decode(
+                    "utf-8", "ignore"
+                )
+                break
+    elif "body" in payload:
+        body = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+            "utf-8", "ignore"
+        )
+
+    messages.append(
+        {
+            "Message-ID": headers.get("Message-ID", "N/A"),
+            "Date": headers.get("Date", "N/A"),
+            "From": headers.get("From", "N/A"),
+            "To": headers.get("To", "N/A"),
+            "Subject": headers.get("Subject", "N/A"),
+            "Body": body or "No readable body",
+        }
+    )
+
+    return messages
+
+
+@app.route("/fetch_gmail_thread", methods=["POST"])
+def fetch_gmail_thread():
     """Fetch email thread details for a given thread ID."""
     app.logger.info("Request Received...")
     data = request.get_json()
     thread_id = data.get("threadId")
     email = data.get("email")
+    """
+    Todo:
+        get specific feature user wants to perform
+            pass it to llm generator process_email_body as a list
+    """
 
-    if not thread_id or not email:
+    try:
+        messages = process_thread(email, thread_id)
+
+        return jsonify({"threadId": thread_id, "messages": messages})
+    except Exception as e:
         return jsonify({"error": "Missing thread ID or email"}), 400
-
-    service = authenticate_gmail(email)
-    thread_data = service.users().threads().get(userId="me", id=thread_id).execute()
-
-    messages = []
-    for msg in thread_data.get("messages", []):
-        payload = msg["payload"]
-        headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
-
-        body = None
-        if "parts" in payload:
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/plain":
-                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                        "utf-8", "ignore"
-                    )
-                    break
-        elif "body" in payload:
-            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
-                "utf-8", "ignore"
-            )
-
-        messages.append(
-            {
-                "messageId": headers.get("Message-ID", "N/A"),
-                "date": headers.get("Date", "N/A"),
-                "from": headers.get("From", "N/A"),
-                "to": headers.get("To", "N/A"),
-                "subject": headers.get("Subject", "N/A"),
-                "body": body or "No readable body",
-            }
-        )
-
-    print(len(messages), "\n\n")
-
-    return jsonify({"threadId": thread_id, "messages": messages})
 
 
 if __name__ == "__main__":

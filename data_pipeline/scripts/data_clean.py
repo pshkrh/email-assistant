@@ -1,13 +1,13 @@
 import pandas as pd
 import re
 import os
-from create_logger import create_logger
 import gc
 import time
 import signal
-import sys
 import traceback
+from create_logger import create_logger
 from contextlib import contextmanager
+from get_project_root import project_root
 
 # Precompile regex patterns for better performance
 FORWARDED_PATTERN = re.compile(r"-----\s*Forwarded Message\s*-----", re.IGNORECASE)
@@ -34,6 +34,12 @@ def time_limit(seconds):
         yield
     finally:
         signal.alarm(0)
+
+
+"""
+Contains_forward c.._reply -> boolean columns
+regex for \n and \t replace multiple with one occurence
+"""
 
 
 # Function to classify emails as 'original', 'reply', or 'forward'
@@ -204,7 +210,7 @@ def data_clean(input_file, output_file, path, logger_name):
     data_cleaning_logger = create_logger(path, logger_name)
 
     # Reduced chunk size to avoid memory issues
-    chunk_size = 1000
+    chunk_size = 100
 
     data_cleaning_logger.info("Starting email processing...")
 
@@ -252,6 +258,8 @@ def data_clean(input_file, output_file, path, logger_name):
 
         # Process remaining chunks
         for chunk_number, chunk in enumerate(reader, start=start_chunk):
+            if chunk_number > 0:
+                return
             try:
                 data_cleaning_logger.info(
                     f"Processing chunk {chunk_number + 1} with {len(chunk)} rows..."
@@ -325,8 +333,9 @@ def data_clean(input_file, output_file, path, logger_name):
 
 if __name__ == "__main__":
     # File paths
-    input_file = "./data_pipeline/data/enron_emails.csv"
-    output_file = "./data_pipeline/data/processed_enron_emails_ver16.csv"
-    path = "./data_pipeline/logs/data_clean_log.log"
-    logger_name = "data_cleaning_logger"
-    data_clean(input_file, output_file, path, logger_name)
+    PROJECT_ROOT_DIR = project_root()
+    INPUT_FILE = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
+    OUTPUT_FILE = f"{PROJECT_ROOT_DIR}/data_pipeline/data/processed_enron_emails.csv"
+    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_clean_log.log"
+    LOGGER_NAME = "data_cleaning_logger"
+    data_clean(INPUT_FILE, OUTPUT_FILE, LOG_PATH, LOGGER_NAME)

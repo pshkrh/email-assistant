@@ -1,7 +1,8 @@
 # model_pipeline/output_verifier.py
-from llm_generator import generate_outputs
 import mlflow
 import re
+from llm_generator import process_email_body
+from llm_ranker import rank_all_outputs
 
 
 def verify_structure(output, task):
@@ -28,20 +29,17 @@ def get_best_output(ranked_outputs, task, body, max_attempts=2):
                     mlflow.log_text(output, f"{task}_verified_output.txt")
                     return output
             attempt += 1
-            ranked_outputs = rank_outputs(generate_outputs(body, task), task, body)
+            ranked_outputs = rank_all_outputs(
+                process_email_body(body, [task]), [task], body
+            )[task]
             mlflow.log_metric(f"{task}_regen_attempts", attempt)
         mlflow.log_text(ranked_outputs[0], f"{task}_fallback_output.txt")
         return ranked_outputs[0]  # Fallback
 
 
-def verify_all_outputs(ranked_outputs_dict, body):
+def verify_all_outputs(ranked_outputs_dict, tasks, body):
     """Verify and select best output for each task."""
-    return {
-        "summary": get_best_output(ranked_outputs_dict["summaries"], "summary", body),
-        "action_items": get_best_output(
-            ranked_outputs_dict["action_items"], "action_items", body
-        ),
-        "draft_reply": get_best_output(
-            ranked_outputs_dict["draft_replies"], "draft_reply", body
-        ),
-    }
+    best_output = {}
+    for task in tasks:
+        best_output[task] = get_best_output(ranked_outputs_dict[task], task, body)
+    return best_output

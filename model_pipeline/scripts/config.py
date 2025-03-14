@@ -5,7 +5,7 @@ import os
 DATA_DIR = "../data"
 ENRON_CSV = os.path.join(DATA_DIR, "enron_emails.csv")
 LABELED_CSV = os.path.join(DATA_DIR, "labeled_enron.csv")
-GMAIL_API_CREDENTIALS = os.path.join(DATA_DIR, "credentials/MailMateCredentials.json")
+GMAIL_API_CREDENTIALS = os.path.join(DATA_DIR, "credentials/MailMateCredential.json")
 TOKEN_DIR = os.path.join(DATA_DIR, "credentials/user_tokens")
 
 # LLM Configuration

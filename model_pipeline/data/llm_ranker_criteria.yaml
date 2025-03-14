@@ -1,0 +1,63 @@
+summary: |
+  task: rank_summaries
+  description: >
+      Given three different AI-generated summaries for an email thread, rank them from best to worst based on clarity, completeness, and relevance to the main points of the thread.
+  criteria:
+      - Clarity: How well does the summary convey the main points in a clear and understandable manner?
+      - Completeness: Does the summary include all key aspects of the email thread without omitting critical details?
+      - Relevance: Does the summary focus on the most important aspects, avoiding unnecessary details?
+  inputs:
+    email_body: {{body}}
+    summaries:
+        - summary_0: {{ output0 }}
+        - summary_1: {{ output1 }}
+        - summary_2: {{ output2 }}
+  output_format:
+      ranked_indices: [index_0, index_1, index_2]  # Indices of the summaries in ranked order
+
+     Please Structure the response in the following format:
+    ```
+    ranked_indices: [index_0, index_1, index_2]
+    ```
+
+draft_reply: |
+  task: rank_draft_replies
+  description: >
+  Given three AI-generated draft replies to an email thread, rank them from best to worst based on professionalism, clarity, and appropriateness.
+  criteria:
+  - Professionalism: Does the reply maintain a professional tone and appropriate level of formality?
+  - Clarity: Is the response well-structured and easy to understand?
+  - Appropriateness: Does the reply appropriately address the sender’s concerns, questions, or requests?
+  inputs:
+    email_body: {{body}}
+    draft_replies:
+        - draft_reply_0: {{ output0 }}
+        - draft_reply_1: {{ output1 }}
+        - draft_reply_2: {{ output2 }}
+  output_format:
+      ranked_indices: [index_0, index_1, index_2]  # Indices of the draft_replies in ranked order
+      Please Structure the response in the following format:
+    ```
+    ranked_indices: [index_0, index_1, index_2]
+    ```
+
+action_item: |
+  task: rank_action_items
+    description: >
+    Given three sets of AI-generated action items from an email thread, rank them from best to worst based on actionability, completeness, and specificity.
+    criteria:
+    - Actionability: Are the action items clear, practical, and easily executable?
+    - Completeness: Do they capture all necessary follow-ups and responsibilities?
+    - Specificity: Are the action items detailed enough (e.g., including deadlines, assignees, or specific steps)?
+    inputs:
+        email_body: {{body}}
+        action_items:
+            - action_items_0: {{ output0 }}
+            - action_items_1: {{ output1 }}
+            - action_items_2: {{ output2 }}
+    output_format:
+        ranked_indices: [index_0, index_1, index_2]  # Indices of the action_items in ranked order
+        Please Structure the response in the following format:
+        ```
+        ranked_indices: [index_0, index_1, index_2]
+        ```

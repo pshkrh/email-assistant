@@ -38,7 +38,7 @@ function checkGmailOpen() {
 
 // Function to fetch thread data
 function fetchThreadData(threadId, email) {
-  fetch("http://127.0.0.1:5000/process_thread", {
+  fetch("http://127.0.0.1:5000/fetch_gmail_thread", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ threadId, email }),
