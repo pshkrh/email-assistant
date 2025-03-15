@@ -1,49 +1,62 @@
 import os
 import pandas as pd
-import random
 
 # File Paths
 DATASET_PATH = "./data_pipeline/data/enron_emails.csv" 
-SAMPLED_DATA_PATH = "./data_pipeline/data/enron_sampled_for_labeling.csv"
+BALANCED_SHORT_EMAIL_PATH = "./data_pipeline/data/enron_balanced_short_emails.csv"
+BALANCED_MEDIUM_EMAIL_PATH = "./data_pipeline/data/enron_balanced_medium_emails.csv"
+BALANCED_LONG_EMAIL_PATH = "./data_pipeline/data/enron_balanced_long_emails.csv"
 
-# Keywords to identify actionable emails
-KEYWORDS = ["please", "action required", "follow up", "due date", "urgent", "approve", "schedule", "review"]
+# Minimum required emails per category
+MIN_COUNT = 3500
 
 def load_email_data():
     """Loads the Enron dataset and selects relevant columns."""
     if not os.path.exists(DATASET_PATH):
         print(f"Error: {DATASET_PATH} not found!")
         return None
-
     df = pd.read_csv(DATASET_PATH, usecols=["Message-ID", "Subject", "Body"])
     print(f"Loaded {len(df)} emails from {DATASET_PATH}")
     return df
 
-def filter_emails(df):
-    """Filters emails that contain action-related keywords."""
-    df_filtered = df[df["Body"].str.contains('|'.join(KEYWORDS), case=False, na=False)]
-    print(f"Filtered {len(df_filtered)} emails containing action-related keywords.")
-    return df_filtered
+def categorize_email_body_length(df):
+    """Categorizes emails into short, medium, and long based on body length."""
+    bins = [0, 700, 1500, float('inf')]  # Define thresholds
+    labels = ["Short", "Medium", "Long"]
 
-def sample_emails(df_filtered, sample_size=10):
-    """Samples a subset of emails for labeling."""
-    df_sample = df_filtered.sample(n=sample_size, random_state=42) if len(df_filtered) > sample_size else df_filtered
-    print(f"Sampled {len(df_sample)} emails for labeling.")
-    return df_sample
+    df["Body Length"] = df["Body"].astype(str).apply(len)
+    df["Body Category"] = pd.cut(df["Body Length"], bins=bins, labels=labels, right=False)
+    
+    return df
 
-def save_sampled_data(df_sample):
-    """Saves the sampled emails to a new CSV file for manual labeling."""
-    df_sample["Action Label"] = ""  # Empty column for manual labeling
-    df_sample["Action Type"] = ""  # Empty column for type of action (optional)
-    df_sample["Summary"] = ""  # Empty column for summaries (optional)
-    df_sample["Suggested Reply"] = ""  # Empty column for draft reply (optional)
+def rebalance_and_save_emails(df):
+    """Balances and saves emails into separate CSV files."""
+    # Sample emails per category
+    sampled_dfs = {}
+    for category in ["Short", "Medium", "Long"]:
+        category_df = df[df["Body Category"] == category]
+        sampled_dfs[category] = category_df.sample(n=min(MIN_COUNT, len(category_df)), random_state=42)
 
-    df_sample.to_csv(SAMPLED_DATA_PATH, index=False)
-    print(f"Saved sampled emails to {SAMPLED_DATA_PATH}")
+    # Drop unnecessary columns
+    for key in sampled_dfs:
+        sampled_dfs[key] = sampled_dfs[key].drop(columns=["Body Length", "Body Category"])
+
+        # Add empty columns for manual labeling
+        for col in ["Action Type", "Summary", "Suggested Reply"]:
+            sampled_dfs[key][col] = ""
+
+    # Save to CSV
+    sampled_dfs["Short"].to_csv(BALANCED_SHORT_EMAIL_PATH, index=False)
+    sampled_dfs["Medium"].to_csv(BALANCED_MEDIUM_EMAIL_PATH, index=False)
+    sampled_dfs["Long"].to_csv(BALANCED_LONG_EMAIL_PATH, index=False)
+
+    print("\nFinal Balanced Dataset:")
+    print(f"Short Emails:  {len(sampled_dfs['Short'])} → {BALANCED_SHORT_EMAIL_PATH}")
+    print(f"Medium Emails: {len(sampled_dfs['Medium'])} → {BALANCED_MEDIUM_EMAIL_PATH}")
+    print(f"Long Emails:   {len(sampled_dfs['Long'])} → {BALANCED_LONG_EMAIL_PATH}")
 
 if __name__ == "__main__":
     df = load_email_data()
     if df is not None:
-        df_filtered = filter_emails(df)
-        df_sample = sample_emails(df_filtered)
-        save_sampled_data(df_sample)
+        df = categorize_email_body_length(df)
+        rebalance_and_save_emails(df)
