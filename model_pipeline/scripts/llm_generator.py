@@ -67,7 +67,7 @@ def generate_outputs(task, prompt):
     return outputs
 
 
-def process_email_body(body, tasks, user_email="try8200@gmail.com"):
+def process_email_body(body, tasks, user_email):
     """Generate outputs for all tasks."""
     PROJECT_ROOT = project_root()
     prompt_file_path = os.path.join(
@@ -85,7 +85,6 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
                 {render_prompt(prompts[task], body, user_email)}
             """
             if full_prompt:
-
                 llm_outputs[task] = generate_outputs(task, full_prompt)
             else:
                 llm_outputs[task] = f"No prompt found for task: {task}"
@@ -101,38 +100,35 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
 
 
 if __name__ == "__main__":
-    #     body = """
-    #         Checked out
-    # ---------- Forwarded message ---------
-    # From: Try <try8200@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:41 PM
-    # Subject: Fwd: Test
-    # To: Shubh Desai <shubhdesai111@gmail.com>
+    body = """
+    Checked out
+    ---------- Forwarded message ---------
+    From: Try <try8200@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:41 PM
+    Subject: Fwd: Test
+    To: Shubh Desai <shubhdesai111@gmail.com>
 
-    # Check out this
-    # ---------- Forwarded message ---------
-    # From: Shubh Desai <shubhdesai111@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:37 PM
-    # Subject: Re: Test
-    # To: Try <try8200@gmail.com>
+    Check out this
+    ---------- Forwarded message ---------
+    From: Shubh Desai <shubhdesai111@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:37 PM
+    Subject: Re: Test
+    To: Try <try8200@gmail.com>
 
-    # Hey, once again
+    Hey, once again
 
-    # On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-    # hello Shubh
+    On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
+    hello Shubh
 
-    # On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-    # Hello Try
-    #     """
-    body = """ 
-        Anomalies detected in email dataset:
+    On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
+    Hello Try
+    """
 
-Column: Date, Expectation: expect_column_values_to_be_in_set, Unexpected Count: 4, Unexpected Percent: 0.0007734998936437646, Partial Indexes: [140690, 140694, 140705, 140707]
-"""
-    tasks = ["draft_reply", "summary"]
-    llm_outputs = process_email_body(body, tasks)
-    print("LLM OUTPUTS: ", llm_outputs)
-    for output in llm_outputs["draft_reply"]:
-        print("\n-----------\n", output, "\n-------------\n")
-    for output in llm_outputs["summary"]:
-        print("\n-----------\n", output, "\n-------------\n")
+    # tasks = ["summary", "draft_reply", "action_items"]
+    # llm_outputs = process_email_body(body, tasks)
+    # print("LLM OUTPUTS: ", llm_outputs)
+
+    # for output in llm_outputs["draft_reply"]:
+    #     print("\n-----------\n", output, "\n-------------\n")
+    # for output in llm_outputs["summary"]:
+    #     print("\n-----------\n", output, "\n-------------\n")
