@@ -1,0 +1,47 @@
+summary:
+  # A label to identify the task
+  name: "summary"
+
+  # Regex to match bullet points (line starting with "-" or "*")
+  bullet_patterns:
+    - "^[ \t]*-[ \t]+"
+    - "^[ \t]*\\*[ \t]+"
+
+  # Words or phrases that should *not* appear in the text
+  prohibited_phrases:
+    - "Dear"
+    - "Best regards"
+    - "Regards"
+    - "Sincerely"
+    - "Thank you"
+
+  # If you want a word-count check (uncomment if desired)
+  # min_word_count: 20
+  # max_word_count: 100
+
+action_items:
+  name: "action_items"
+
+  # Lines can start with "-", "*", or a digit+dot for bullet points
+  bullet_patterns:
+    - "^[ \t]*-[ \t]+"
+    - "^[ \t]*\\*[ \t]+"
+    - "^[ \t]*\\d+\\.[ \t]+"
+
+  prohibited_phrases:
+    - "Dear"
+
+draft_reply:
+  name: "draft_reply"
+
+  required_phrases:
+    - "Dear"
+
+  sign_off_phrases:
+    - "Best regards"
+    - "Regards"
+    - "Sincerely"
+    - "Thank you"
+
+  # If you want a check for minimum lines in the reply
+  min_lines: 3

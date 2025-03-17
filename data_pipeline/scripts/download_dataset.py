@@ -12,22 +12,24 @@ from tqdm import tqdm
 
 from create_logger import create_logger
 
+from get_project_root import project_root
+
 warnings.filterwarnings("ignore")
 
 DATA_DIR = "dataset"
 
 
-def download_enron_dataset(url, save_path, path, logger_name):
+def download_enron_dataset(url, save_path, log_path, logger_name):
     """
     Downloads the Enron dataset from a given URL and saves it locally.
 
     Parameters:
         url (str): URL of the dataset.
-        save_path (str): Path to save the downloaded file.
-        path (str): Path for logging.
+        save_path (str): log_path to save the downloaded file.
+        log_path (str): Path for logging.
         logger_name (str): Name of the logger.
     """
-    data_downloading_logger = create_logger(path, logger_name)
+    data_downloading_logger = create_logger(log_path, logger_name)
     try:
         chunk_size = 1024 * 1024
 
@@ -61,8 +63,13 @@ def download_enron_dataset(url, save_path, path, logger_name):
 
 if __name__ == "__main__":
     DATASET_URL = "https://www.cs.cmu.edu/~enron/enron_mail_20150507.tar.gz"
-    SAVE_PATH = "./data_pipeline/data/enron_mail_20150507.tar.gz"
-    PATH = "./data_pipeline/logs/data_downloading_log.log"
+    PROJECT_ROOT_DIR = project_root()
+    SAVE_PATH = os.path.join(
+        PROJECT_ROOT_DIR, "data_pipeline", "data", "enron_mail_20150507.tar.gz"
+    )
+    LOG_PATH = os.path.join(
+        PROJECT_ROOT_DIR, "data_pipeline", "logs", "data_downloading_log.log"
+    )
     LOGGER_NAME = "data_downloading_logger"
 
-    download_enron_dataset(DATASET_URL, SAVE_PATH, PATH, LOGGER_NAME)
+    download_enron_dataset(DATASET_URL, SAVE_PATH, LOG_PATH, LOGGER_NAME)

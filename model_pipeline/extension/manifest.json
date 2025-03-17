@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Gmail Thread Explorer",
+  "version": "1.0",
+  "description": "Fetch and display Gmail thread details with ease",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "host_permissions": ["http://localhost:5000/*"]
+}
