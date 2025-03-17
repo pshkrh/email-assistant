@@ -17,6 +17,7 @@ data_pipeline/scripts/__pycache__/
 data_pipeline/scripts/data_cleaning.py
 data_pipeline/scripts/feature_engineering.py
 data_pipeline/scripts/save_to_csv.py
+data_pipeline/scripts/temp.py
 data_pipeline/tests/__pycache__/
 dags/__pycache__/
 dags/data_pipeline/gx/

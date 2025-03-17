@@ -1,7 +1,7 @@
-# model_pipeline/llm_generator.py
+import sys
+import os
 import json
 import yaml
-import os
 import mlflow
 import pandas as pd
 from jinja2 import Template
@@ -11,9 +11,12 @@ import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.auth import load_credentials_from_file
 
-from get_project_root import project_root
-from load_prompts import load_prompts
-from render_prompt import render_prompt
+# Ensure correct module path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from scripts.get_project_root import project_root
+from scripts.load_prompts import load_prompts
+from scripts.render_prompt import render_prompt
 
 load_dotenv()
 
@@ -22,8 +25,7 @@ GCP_LOCATION = os.getenv("GCP_LOCATION")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 PROJECT_ROOT_DIR = project_root()
 
-
-# Path to your service account JSON file
+# Path to service account JSON file
 SERVICE_ACCOUNT_FILE = os.path.join(
     PROJECT_ROOT_DIR, "model_pipeline", "credentials", "GoogleCloudCredential.json"
 )
@@ -32,11 +34,9 @@ CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
 # Initialize Vertex AI
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENTIALS)
 
-
 """
 Prompts, LLM request code, 
 """
-
 
 def generate_outputs(task, prompt):
     """Generate 3 outputs for a given task using LLM."""
@@ -47,8 +47,8 @@ def generate_outputs(task, prompt):
         for i in range(3):
             model = GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002"))
             response = model.generate_content(prompt)
-            # Extract text response and attempt to parse it as JSON
             response_text = response.text.strip()
+
             # Ensure structured response formatting
             structured_data = (
                 json.loads(response_text)
@@ -66,26 +66,21 @@ def generate_outputs(task, prompt):
         mlflow.log_param(f"{task}_output_count", len(outputs))
     return outputs
 
-
 def process_email_body(body, tasks, user_email="try8200@gmail.com"):
     """Generate outputs for all tasks."""
-    PROJECT_ROOT = project_root()
     prompt_file_path = os.path.join(
-        PROJECT_ROOT, "model_pipeline", "data", "llm_generator_prompts.yaml"
+        project_root(), "model_pipeline", "data", "llm_generator_prompts.yaml"
     )
     prompts = load_prompts(prompt_file_path)
 
     llm_outputs = {}
 
-    # Use with statement to automatically close the file
     try:
-        # Loop through each task and generate the output
         for task in tasks:
             full_prompt = f"""
                 {render_prompt(prompts[task], body, user_email)}
             """
             if full_prompt:
-
                 llm_outputs[task] = generate_outputs(task, full_prompt)
             else:
                 llm_outputs[task] = f"No prompt found for task: {task}"
@@ -99,36 +94,31 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
         print(f"Unexpected error: {e}")
         return llm_outputs
 
-
 if __name__ == "__main__":
-    #     body = """
-    #         Checked out
-    # ---------- Forwarded message ---------
-    # From: Try <try8200@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:41 PM
-    # Subject: Fwd: Test
-    # To: Shubh Desai <shubhdesai111@gmail.com>
+    body = """
+    Checked out
+    ---------- Forwarded message ---------
+    From: Try <try8200@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:41 PM
+    Subject: Fwd: Test
+    To: Shubh Desai <shubhdesai111@gmail.com>
 
-    # Check out this
-    # ---------- Forwarded message ---------
-    # From: Shubh Desai <shubhdesai111@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:37 PM
-    # Subject: Re: Test
-    # To: Try <try8200@gmail.com>
+    Check out this
+    ---------- Forwarded message ---------
+    From: Shubh Desai <shubhdesai111@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:37 PM
+    Subject: Re: Test
+    To: Try <try8200@gmail.com>
 
-    # Hey, once again
+    Hey Try, Can you give me avalibility for interview?
 
-    # On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-    # hello Shubh
+    On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
+    hello Shubh, Yes I am available in the next week Monday 9AM to 4PM, and Tuesday 12AM to  5PM.
 
-    # On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-    # Hello Try
-    #     """
-    body = """ 
-        Anomalies detected in email dataset:
-
-Column: Date, Expectation: expect_column_values_to_be_in_set, Unexpected Count: 4, Unexpected Percent: 0.0007734998936437646, Partial Indexes: [140690, 140694, 140705, 140707]
-"""
+    On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
+    Hello Try, according to your availibility I would like to arrange interview on Tuesday 10am to 10:30am.
+    """
+    
     tasks = ["draft_reply", "summary"]
     llm_outputs = process_email_body(body, tasks)
     print("LLM OUTPUTS: ", llm_outputs)
