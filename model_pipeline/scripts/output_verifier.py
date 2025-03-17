@@ -43,3 +43,6 @@ def verify_all_outputs(ranked_outputs_dict, tasks, body):
     for task in tasks:
         best_output[task] = get_best_output(ranked_outputs_dict[task], task, body)
     return best_output
+
+if _name_ == "_main_":
+    verify_all_outputs()

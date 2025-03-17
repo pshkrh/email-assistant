@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.auth import load_credentials_from_file
+import re
 
 # Ensure correct module path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -38,10 +39,11 @@ vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENT
 Prompts, LLM request code, 
 """
 
+
 def generate_outputs(task, prompt):
     """Generate 3 outputs for a given task using LLM."""
     outputs = []
-    with mlflow.start_run(nested=True):  # Nested run for each task
+    with mlflow.start_run(nested=True):
         mlflow.log_param(f"{task}_prompt", prompt)
 
         for i in range(3):
@@ -49,50 +51,64 @@ def generate_outputs(task, prompt):
             response = model.generate_content(prompt)
             response_text = response.text.strip()
 
-            # Ensure structured response formatting
-            structured_data = (
-                json.loads(response_text)
-                if response_text.startswith("{")
-                else {
-                    task: (
-                        response_text.split(f"{task}:")[1].split("```")[0]
-                        if f"{task}:" in response_text
-                        else f"No {task}"
-                    )
-                }
-            )
+            # ✅ Strictly check if response is structured JSON
+            if response_text.startswith("{"):
+                try:
+                    structured_data = json.loads(response_text)
+                except json.JSONDecodeError:
+                    structured_data = {task: f"No {task} (Invalid JSON format)"}
+            else:
+                # ✅ If response does not follow expected format, enforce fallback
+                structured_data = {task: response_text}
+                
+                # 🔹 Ensure proper structure for `summary`, `draft_reply`, and `action_items`
+                if task == "summary" and not re.match(r"summary:\s*-", response_text):
+                    structured_data = {task: f"No {task} (Unstructured response)"}
+                elif task == "draft_reply" and "Dear" not in response_text:
+                    structured_data = {task: f"No {task} (Invalid reply format)"}
+                elif task == "action_item" and not re.match(r"action_item:\s*-", response_text):
+                    structured_data = {task: f"No {task} (Unstructured response)"}
+
             outputs.append(structured_data[task])
             mlflow.log_text(structured_data[task], f"{task}_output_{i}.txt")
+
         mlflow.log_param(f"{task}_output_count", len(outputs))
+
     return outputs
+
+
 
 def process_email_body(body, tasks, user_email="try8200@gmail.com"):
     """Generate outputs for all tasks."""
     prompt_file_path = os.path.join(
         project_root(), "model_pipeline", "data", "llm_generator_prompts.yaml"
     )
-    prompts = load_prompts(prompt_file_path)
+
+    try:
+        prompts = load_prompts(prompt_file_path)
+    except FileNotFoundError:
+        print(f"Warning: Prompt file '{prompt_file_path}' not found.")
+        return {}
+    except Exception as e:
+        print(f"Unexpected error while loading prompts: {e}")
+        return {}
 
     llm_outputs = {}
 
-    try:
-        for task in tasks:
-            full_prompt = f"""
-                {render_prompt(prompts[task], body, user_email)}
-            """
-            if full_prompt:
-                llm_outputs[task] = generate_outputs(task, full_prompt)
-            else:
-                llm_outputs[task] = f"No prompt found for task: {task}"
+    for task in tasks:
+        if task not in prompts:
+            llm_outputs[task] = f"No prompt found for task: {task}"
+            continue
 
-        return llm_outputs
+        try:
+            full_prompt = render_prompt(prompts[task], body, user_email)
+            llm_outputs[task] = generate_outputs(task, full_prompt)
+        except Exception as e:
+            print(f"⚠️ Error while processing task '{task}': {e}")
+            llm_outputs[task] = f"Error generating output for {task}"
 
-    except FileNotFoundError:
-        print(f"Error: The file {prompt_file_path} does not exist.")
-        return llm_outputs
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return llm_outputs
+    return llm_outputs
+
 
 if __name__ == "__main__":
     body = """

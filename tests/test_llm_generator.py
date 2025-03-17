@@ -74,9 +74,10 @@ class TestLLMGenerator(unittest.TestCase):
 
         # Ensure function still generates 3 outputs despite malformed response
         self.assertEqual(len(outputs), 3)
-        
-        # Check if fallback mechanism handled incorrect formatting
-        self.assertIn("No summary", outputs[0] or "summary:" in outputs[0])
+
+        # Check if fallback mechanism correctly detects invalid structure
+        self.assertIn("No summary", outputs[0])  # Now it should trigger the fallback
+
 
     # ---------------------------------------------
     # TESTING EMAIL PROCESSING (`process_email_body`)
