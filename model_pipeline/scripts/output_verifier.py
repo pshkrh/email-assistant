@@ -1,11 +1,11 @@
 # model_pipeline/output_verifier.py
 import mlflow
-from get_project_root import project_root
+
 from llm_generator import process_email_body
 from llm_ranker import rank_all_outputs
 import re
 import yaml
-import os
+from config import STRUCTURE_PROMPTS_YAML
 
 def load_structure_rules(yaml_file_path):
     """
@@ -93,11 +93,11 @@ def verify_structure(output, task, rules):
             return False
         
         # 3. (Optional) Minimum number of lines
-        min_lines = task_rules.get("min_lines", None)
-        if min_lines:
-            lines = output.strip().split('\n')
-            if len(lines) < min_lines:
-                return False
+        # min_lines = task_rules.get("min_lines", None)
+        # if min_lines:
+        #     lines = output.strip().split('\n')
+        #     if len(lines) < min_lines:
+        #         return False
         
         return True
 
@@ -108,11 +108,7 @@ def verify_structure(output, task, rules):
 def get_best_output(ranked_outputs, task, body, userEmail ,max_attempts=2):
     """Verify top output, fall back if needed, retry LLM if all fail."""
     # Example usage:
-    PROJECT_ROOT = project_root()
-    prompt_file_path = os.path.join(
-        PROJECT_ROOT, "model_pipeline", "data", "llm_output_structure.yaml"
-    )
-    rules = load_structure_rules(prompt_file_path)
+    rules = load_structure_rules(STRUCTURE_PROMPTS_YAML)
 
     attempt = 0
     with mlflow.start_run(nested=True):
@@ -131,7 +127,6 @@ def get_best_output(ranked_outputs, task, body, userEmail ,max_attempts=2):
         mlflow.log_text(ranked_outputs[0], f"{task}_fallback_output.txt")
         return  ranked_outputs[0]  # Fallback
 
-
 def verify_all_outputs(ranked_outputs_dict, tasks, body, userEmail):
     """Verify and select best output for each task."""
 
@@ -140,45 +135,45 @@ def verify_all_outputs(ranked_outputs_dict, tasks, body, userEmail):
         best_output[task] = get_best_output(ranked_outputs_dict[task], task, body, userEmail)
     return best_output
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    body = """
-        Checked out
-        ---------- Forwarded message ---------
-        From: Try <try8200@gmail.com>
-        Date: Sun, Mar 9, 2025 at 8:41 PM
-        Subject: Fwd: Test
-        To: Shubh Desai <shubhdesai111@gmail.com>
-
-
-
-        Check out this
-        ---------- Forwarded message ---------
-        From: Shubh Desai <shubhdesai111@gmail.com>
-        Date: Sun, Mar 9, 2025 at 8:37 PM
-        Subject: Re: Test
-        To: Try <try8200@gmail.com>
+#     body = """
+#         Checked out
+#         ---------- Forwarded message ---------
+#         From: Try <try8200@gmail.com>
+#         Date: Sun, Mar 9, 2025 at 8:41 PM
+#         Subject: Fwd: Test
+#         To: Shubh Desai <shubhdesai111@gmail.com>
 
 
-        Hey, once again
 
-        On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-        hello Shubh
+#         Check out this
+#         ---------- Forwarded message ---------
+#         From: Shubh Desai <shubhdesai111@gmail.com>
+#         Date: Sun, Mar 9, 2025 at 8:37 PM
+#         Subject: Re: Test
+#         To: Try <try8200@gmail.com>
 
-        On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-        Hello Try
-        we have a meeting tomorrow at 10am, related to the project and its important to discuss the project and its progress
-        Also we have a important deadline for the project on 30th march of this month. So we need to speed up the process and complete the project on time.
 
-    """ 
+#         Hey, once again
 
-    # Test the output verifier
-    tasks = ["summary", "action_item", "draft_reply"]
-    userEmail = "try8200@gmail.com"
-    llm_outputs = process_email_body(body, tasks, userEmail)
-    ranked_outputs = rank_all_outputs(llm_outputs, tasks, body)
-    best_outputs = verify_all_outputs(ranked_outputs, tasks, body, userEmail)
-    for task, output in best_outputs.items():
-        print(f"\n\n{task.upper()} OUTPUT\n{output}\n\n")
+#         On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
+#         hello Shubh
 
-    # print(best_outputs)
+#         On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
+#         Hello Try
+#         we have a meeting tomorrow at 10am, related to the project and its important to discuss the project and its progress
+#         Also we have a important deadline for the project on 30th march of this month. So we need to speed up the process and complete the project on time.
+
+#     """ 
+
+#     # Test the output verifier
+#     tasks = ["summary", "action_item", "draft_reply"]
+#     userEmail = "try8200@gmail.com"
+#     llm_outputs = process_email_body(body, tasks, userEmail)
+#     ranked_outputs = rank_all_outputs(llm_outputs, tasks, body)
+#     best_outputs = verify_all_outputs(ranked_outputs, tasks, body, userEmail)
+#     for task, output in best_outputs.items():
+#         print(f"\n\n{task.upper()} OUTPUT\n{output}\n\n")
+
+#     # print(best_outputs)

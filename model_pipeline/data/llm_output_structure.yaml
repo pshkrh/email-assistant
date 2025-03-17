@@ -23,10 +23,12 @@ action_items:
   name: "action_items"
 
   # Lines can start with "-", "*", or a digit+dot for bullet points
+# Lines can start with "-", "*", a digit+dot, or any non-empty line
   bullet_patterns:
-    - "^[ \t]*-[ \t]+"
-    - "^[ \t]*\\*[ \t]+"
-    - "^[ \t]*\\d+\\.[ \t]+"
+    - "^[ \t]*-[ \t]+"       # Matches lines starting with "-"
+    - "^[ \t]*\\*[ \t]+"     # Matches lines starting with "*"
+    - "^[ \t]*\\d+\\.[ \t]+" # Matches lines starting with "1."
+    - "^(?![ \t]*[-*\\d\\.])[^\s].*"  # Matches any non-empty line that does not start with "-", "*", or a digit+"."
 
   prohibited_phrases:
     - "Dear"
@@ -44,4 +46,4 @@ draft_reply:
     - "Thank you"
 
   # If you want a check for minimum lines in the reply
-  min_lines: 3
+  # min_lines: 3

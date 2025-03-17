@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from flask_cors import CORS
-from get_project_root import project_root
+from config import GMAIL_API_CREDENTIALS, TOKEN_DIR
 
 app = Flask(__name__)
 
@@ -23,13 +23,9 @@ logging.basicConfig(level=logging.DEBUG)
 # CORS(app)
 CORS(app, resources={r"/fetch_gmail_thread": {"origins": "chrome-extension://*"}})
 
-PROJECT_ROOT_DIR = project_root()
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-CREDENTIALS_FILE = (
-    f"{PROJECT_ROOT_DIR}/model_pipeline/credentials/MailMateCredential.json"
-)
-TOKEN_DIR = f"{PROJECT_ROOT_DIR}/model_pipeline/credentials/user_tokens"
-
+CREDENTIALS_FILE = GMAIL_API_CREDENTIALS
+TOKEN_DIR = TOKEN_DIR
 
 def authenticate_gmail(email):
     """Authenticate Gmail user and return API service."""

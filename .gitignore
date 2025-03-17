@@ -9,7 +9,7 @@ email1/
 .pytest_cache/
 .env
 email-assistant.json
-.mail_mate_credentials.json
+mail_mate_credentials.json
 profile.out
 data_pipeline/gx/
 data_pipeline/logs/*.log
