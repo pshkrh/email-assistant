@@ -1,11 +1,6 @@
-# model_pipeline/llm_generator.py
 import json
-import yaml
 import os
 import mlflow
-import pandas as pd
-from jinja2 import Template
-from tqdm import tqdm
 from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
@@ -31,11 +26,6 @@ CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
 
 # Initialize Vertex AI
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENTIALS)
-
-
-"""
-Prompts, LLM request code, 
-"""
 
 
 def generate_outputs(task, prompt):
@@ -101,34 +91,30 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
 
 
 if __name__ == "__main__":
-    #     body = """
-    #         Checked out
-    # ---------- Forwarded message ---------
-    # From: Try <try8200@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:41 PM
-    # Subject: Fwd: Test
-    # To: Shubh Desai <shubhdesai111@gmail.com>
+    body = """
+            Checked out
+    ---------- Forwarded message ---------
+    From: Try <try8200@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:41 PM
+    Subject: Fwd: Test
+    To: Shubh Desai <shubhdesai111@gmail.com>
 
-    # Check out this
-    # ---------- Forwarded message ---------
-    # From: Shubh Desai <shubhdesai111@gmail.com>
-    # Date: Sun, Mar 9, 2025 at 8:37 PM
-    # Subject: Re: Test
-    # To: Try <try8200@gmail.com>
+    Check out this
+    ---------- Forwarded message ---------
+    From: Shubh Desai <shubhdesai111@gmail.com>
+    Date: Sun, Mar 9, 2025 at 8:37 PM
+    Subject: Re: Test
+    To: Try <try8200@gmail.com>
 
-    # Hey, once again
+    Hey, once again
 
-    # On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-    # hello Shubh
+    On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
+    hello Shubh
 
-    # On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-    # Hello Try
-    #     """
-    body = """ 
-        Anomalies detected in email dataset:
+    On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
+    Hello Try
+        """
 
-Column: Date, Expectation: expect_column_values_to_be_in_set, Unexpected Count: 4, Unexpected Percent: 0.0007734998936437646, Partial Indexes: [140690, 140694, 140705, 140707]
-"""
     tasks = ["draft_reply", "summary"]
     llm_outputs = process_email_body(body, tasks)
     print("LLM OUTPUTS: ", llm_outputs)

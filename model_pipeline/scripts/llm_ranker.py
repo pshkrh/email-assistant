@@ -9,10 +9,6 @@ from google.auth import load_credentials_from_file
 import vertexai
 from vertexai.generative_models import GenerativeModel
 
-"""
-criteria prompts
-"""
-
 # GCP settings
 GCP_LOCATION = os.getenv("GCP_LOCATION")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
@@ -142,19 +138,6 @@ Hello Try
             "\n- Anomalies detected in the email dataset.\n- Anomaly found in the 'Date' column.\n- Expectation: column values should be in a defined set.\n- Unexpected count: 4.\n- Unexpected percentage: 0.0007734998936437646.\n- Partial indexes affected: 140690, 140694, 140705, and 140707.\n",
         ],
     }
-
-    # {
-    #     "draft_reply": [
-    #         " Dear Shubh Desai,\n\nThanks for the follow-up. I've seen the forwarded message.\n\nBest regards,\n\nTry\n",
-    #         " Dear Shubh Desai,\n\nThanks for the quick reply! I've seen the forwarded message as well.\n\nBest,\n\nTry\n",
-    #         " Dear Shubh Desai,\n\nThanks for the follow-up! I hope you are doing well.\n\nBest,\nTry\n",
-    #     ],
-    #     "summary": [
-    #         '\n- Shubh Desai initiated the email thread with a greeting to Try.\n- Try replied with a greeting to Shubh Desai.\n- Shubh Desai responded again to Try.\n- Try forwarded the email to Shubh Desai and included a message "Check out this."\n',
-    #         "\n- Shubh Desai and Try exchanged greetings in an email thread.\n- Try forwarded an email to Shubh Desai.\n",
-    #         '\n- Shubh Desai and Try exchanged greetings.\n- Shubh Desai forwarded the message to Try.\n- Try forwarded the message to Shubh Desai with "Check out this" as the content.\n',
-    #     ],
-    # }
 
     tasks = ["draft_reply", "summary"]
     ranked_outputs = rank_all_outputs(llm_outputs, tasks, body)
