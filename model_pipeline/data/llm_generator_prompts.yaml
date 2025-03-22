@@ -20,6 +20,7 @@ summary: |
 draft_reply: |
   Given the following email thread, generate a polite, professional, and contextually appropriate reply from the perspective of "{{ user_email }}":
   Include all the named entites properly wherever required to.
+
   Email thread:
   """
   {{ email_thread }}
@@ -37,16 +38,17 @@ draft_reply: |
 
 action_item: |
   From the email thread below, identify clear action items or tasks that the recipient {{ user_email }} needs to perform. List these action items clearly and concisely.
-  Include all the named entites properly wherever required to.
+  Include all the named entites properly wherever required to. Ensure the response is always in a structured bullet-point list format.
+
   Email Thread:
   """
   {{ email_thread }}
   """
 
-  Action Items for {{ user_email }}:
-  - [Action Item 1]
-  - [Action Item 2]
-  - [Action Item N]
+  Action Items in concise bullet points for {{ user_email }}:
+  - [Point 1]
+  - [Point 2]
+  - [Point N]
 
   Please Structure the response in the following format:
   ```

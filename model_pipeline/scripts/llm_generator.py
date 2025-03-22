@@ -1,12 +1,16 @@
+# model_pipeline/llm_generator.py
 import json
+import yaml
 import os
 import mlflow
+import pandas as pd
+from jinja2 import Template
+from tqdm import tqdm
 from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.auth import load_credentials_from_file
-
-from get_project_root import project_root
+from config import SERVICE_ACCOUNT_FILE, GENERATOR_PROMPTS_YAML
 from load_prompts import load_prompts
 from render_prompt import render_prompt
 
@@ -15,17 +19,15 @@ load_dotenv()
 # GCP settings
 GCP_LOCATION = os.getenv("GCP_LOCATION")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
-PROJECT_ROOT_DIR = project_root()
 
-
-# Path to your service account JSON file
-SERVICE_ACCOUNT_FILE = os.path.join(
-    PROJECT_ROOT_DIR, "model_pipeline", "credentials", "GoogleCloudCredential.json"
-)
 CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
 
 # Initialize Vertex AI
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENTIALS)
+
+"""
+Prompts, LLM request code, 
+"""
 
 
 def generate_outputs(task, prompt):
@@ -57,13 +59,10 @@ def generate_outputs(task, prompt):
     return outputs
 
 
-def process_email_body(body, tasks, user_email="try8200@gmail.com"):
+def process_email_body(body, tasks, user_email):
     """Generate outputs for all tasks."""
-    PROJECT_ROOT = project_root()
-    prompt_file_path = os.path.join(
-        PROJECT_ROOT, "model_pipeline", "data", "llm_generator_prompts.yaml"
-    )
-    prompts = load_prompts(prompt_file_path)
+
+    prompts = load_prompts(GENERATOR_PROMPTS_YAML)
 
     llm_outputs = {}
 
@@ -75,7 +74,6 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
                 {render_prompt(prompts[task], body, user_email)}
             """
             if full_prompt:
-
                 llm_outputs[task] = generate_outputs(task, full_prompt)
             else:
                 llm_outputs[task] = f"No prompt found for task: {task}"
@@ -83,42 +81,43 @@ def process_email_body(body, tasks, user_email="try8200@gmail.com"):
         return llm_outputs
 
     except FileNotFoundError:
-        print(f"Error: The file {prompt_file_path} does not exist.")
+        print(f"Error: The file {GENERATOR_PROMPTS_YAML} does not exist.")
         return llm_outputs
     except Exception as e:
         print(f"Unexpected error: {e}")
         return llm_outputs
 
 
-if __name__ == "__main__":
-    body = """
-            Checked out
-    ---------- Forwarded message ---------
-    From: Try <try8200@gmail.com>
-    Date: Sun, Mar 9, 2025 at 8:41 PM
-    Subject: Fwd: Test
-    To: Shubh Desai <shubhdesai111@gmail.com>
+# if __name__ == "__main__":
+#     body = """
+#     Checked out
+#     ---------- Forwarded message ---------
+#     From: Try <try8200@gmail.com>
+#     Date: Sun, Mar 9, 2025 at 8:41 PM
+#     Subject: Fwd: Test
+#     To: Shubh Desai <shubhdesai111@gmail.com>
 
-    Check out this
-    ---------- Forwarded message ---------
-    From: Shubh Desai <shubhdesai111@gmail.com>
-    Date: Sun, Mar 9, 2025 at 8:37 PM
-    Subject: Re: Test
-    To: Try <try8200@gmail.com>
+#     Check out this
+#     ---------- Forwarded message ---------
+#     From: Shubh Desai <shubhdesai111@gmail.com>
+#     Date: Sun, Mar 9, 2025 at 8:37 PM
+#     Subject: Re: Test
+#     To: Try <try8200@gmail.com>
 
-    Hey, once again
+#     Hey, once again
 
-    On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-    hello Shubh
+#     On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
+#     hello Shubh
 
-    On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-    Hello Try
-        """
+#     On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
+#     Hello Try
+#     """
 
-    tasks = ["draft_reply", "summary"]
-    llm_outputs = process_email_body(body, tasks)
-    print("LLM OUTPUTS: ", llm_outputs)
-    for output in llm_outputs["draft_reply"]:
-        print("\n-----------\n", output, "\n-------------\n")
-    for output in llm_outputs["summary"]:
-        print("\n-----------\n", output, "\n-------------\n")
+# tasks = ["summary", "draft_reply", "action_items"]
+# llm_outputs = process_email_body(body, tasks)
+# print("LLM OUTPUTS: ", llm_outputs)
+
+# for output in llm_outputs["draft_reply"]:
+#     print("\n-----------\n", output, "\n-------------\n")
+# for output in llm_outputs["summary"]:
+#     print("\n-----------\n", output, "\n-------------\n")

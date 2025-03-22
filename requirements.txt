@@ -15,3 +15,6 @@ flask_cors
 mlflow
 jinja2
 vertexai
+fuzzywuzzy
+nltk
+rouge-score
