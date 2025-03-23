@@ -1,0 +1,53 @@
+name: Model Training and Deployment CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'model_pipeline/**'  
+jobs:
+  train-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          python -m spacy download en_core_web_sm  # Required for validation
+
+      - name: Train Model
+        run: |
+          python model_pipeline/main.py
+
+      - name: Validate Model
+        run: |
+          python model_pipeline/validation.py
+
+      - name: Check for Bias
+        run: |
+          python model_pipeline/bias_checker.py
+
+      - name: Register Model in MLflow
+        run: |
+          export MLFLOW_TRACKING_URI=https://mlflow.yourserver.com
+          mlflow models serve -m "runs:/latest/model" --port 5000
+
+      - name: Deploy Model (if applicable)
+        run: |
+          python model_pipeline/deploy.py  # Implement deployment logic
+
+      - name: Notify Slack on Success
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        with:
+          message: "🚀 Model training and validation completed successfully!"
