@@ -1,0 +1,56 @@
+summary: |
+  You are an email summarization assistant. Given the email thread below, summarize the conversation into concise bullet points highlighting key topics, decisions, and critical points. Avoid unnecessary details or greetings/signatures. 
+  Include all the named entites properly wherever required to.
+
+  Email Thread:
+  """
+  {{ email_thread }}
+  """
+
+  Summary in concise bullet points:
+  - [Point 1]
+  - [Point 2]
+  - [Point N]
+
+  Please Structure the response in the following format:
+  ```
+  summary: <summary_text_here>
+  ```
+
+draft_reply: |
+  Given the following email thread, generate a polite, professional, and contextually appropriate reply from the perspective of "{{ user_email }}":
+  Include all the named entites properly wherever required to.
+
+  Email thread:
+  """
+  {{ email_thread }}
+  """
+
+  Draft reply:
+
+  Dear [Recipient],
+  [Draft reply generated here based on thread context.]
+
+  Please Structure the response in the following format:
+  ```
+  draft_reply: <suggested_reply_here>
+  ```
+
+action_item: |
+  From the email thread below, identify clear action items or tasks that the recipient {{ user_email }} needs to perform. List these action items clearly and concisely.
+  Include all the named entites properly wherever required to. Ensure the response is always in a structured bullet-point list format.
+
+  Email Thread:
+  """
+  {{ email_thread }}
+  """
+
+  Action Items in concise bullet points for {{ user_email }}:
+  - [Point 1]
+  - [Point 2]
+  - [Point N]
+
+  Please Structure the response in the following format:
+  ```
+  action_item: <action_items_here>
+  ```

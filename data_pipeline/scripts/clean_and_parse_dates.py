@@ -22,9 +22,10 @@ import re
 import pandas as pd
 
 from create_logger import create_logger
+from get_project_root import project_root
 
 
-def clean_and_parse_dates(csv_path, path, logger_name):
+def clean_and_parse_dates(csv_path, log_path, logger_name):
     """
     Cleans and processes the 'Date' column in the DataFrame by:
     - Removing timezone abbreviations
@@ -33,13 +34,15 @@ def clean_and_parse_dates(csv_path, path, logger_name):
     - Extracting day, time, and date components
 
     Parameters:
-        df (pd.DataFrame): DataFrame containing a 'Date' column.
+        csv_path (str): Path to csv.
+        log_path (str): Path for logging.
+        logger_name (str): Name of the logger.
 
     Returns:
-        pd.DataFrame: DataFrame with cleaned and parsed date-related columns.
+        CSV PATH: CSV PATH to cleaned and parsed csv with date-related columns.
     """
 
-    data_preprocessing_logger = create_logger(path, logger_name)
+    data_preprocessing_logger = create_logger(log_path, logger_name)
     try:
 
         df = pd.read_csv(csv_path)
@@ -113,9 +116,11 @@ def clean_and_parse_dates(csv_path, path, logger_name):
 
 if __name__ == "__main__":
 
-    CSV_PATH = "./data_pipeline/data/enron_emails.csv"
+    PROJECT_ROOT_DIR = project_root()
 
-    PATH = "./data_pipeline/logs/data_preprocessing_log.log"
+    CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
+
+    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_preprocessing_log.log"
     LOGGER_NAME = "data_preprocessing_logger"
 
-    CSV_PATH = clean_and_parse_dates(PATH, LOGGER_NAME, CSV_PATH)
+    CSV_PATH = clean_and_parse_dates(LOG_PATH, LOGGER_NAME, CSV_PATH)

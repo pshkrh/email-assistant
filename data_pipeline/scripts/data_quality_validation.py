@@ -5,7 +5,7 @@ This script validates email datasets against predefined data expectations,
 ensuring data quality, consistency, and schema integrity.
 
 Functions:
-    validate_data(csv_path, suite, context_root_dir, path, logger_name)
+    validate_data(csv_path, suite, context_root_dir, log_path, logger_name)
 """
 
 import pandas as pd
@@ -14,7 +14,7 @@ import great_expectations as gx
 from create_logger import create_logger
 
 
-def validate_data(csv_path, suite, context_root_dir, path, logger_name):
+def validate_data(csv_path, suite, context_root_dir, log_path, logger_name):
     """
     Performs data validation using Great Expectations.
 
@@ -22,14 +22,14 @@ def validate_data(csv_path, suite, context_root_dir, path, logger_name):
         csv_path (str): Path to the input CSV file.
         suite (str): Name of the Great Expectations validation suite.
         context_root_dir (str): Root directory of the Great Expectations context.
-        path (str): Path for logging.
+        log_path (str): Path for logging.
         logger_name (str): Name of the logger.
 
     Returns:
         validation_result (dict): Validation results containing validation outcomes.
     """
     context = gx.get_context(context_root_dir=context_root_dir)
-    data_quality_logger = create_logger(path, logger_name)
+    data_quality_logger = create_logger(log_path, logger_name)
     try:
         df = pd.read_csv(csv_path)
         data_quality_logger.info("Setting up Validation Definition to run...")

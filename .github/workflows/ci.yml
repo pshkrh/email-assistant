@@ -3,10 +3,10 @@ name: Run Tests
 on:
   push:
     branches:
-      - main
+      - shubh_desai
   pull_request:
     branches:
-      - main
+      - shubh_desai
 
 jobs:
   test:
@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'  
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
