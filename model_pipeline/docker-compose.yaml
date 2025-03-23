@@ -1,0 +1,9 @@
+services:
+  model_pipeline:
+    build: .
+    container_name: model_pipeline_container
+    volumes:
+      - .:/model_pipeline  # Mount local directory into the container
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "scripts/main.py"]

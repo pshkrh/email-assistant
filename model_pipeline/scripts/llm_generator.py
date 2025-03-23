@@ -10,11 +10,11 @@ from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.auth import load_credentials_from_file
-from config import SERVICE_ACCOUNT_FILE, GENERATOR_PROMPTS_YAML
+from config import SERVICE_ACCOUNT_FILE, GENERATOR_PROMPTS_YAML, MODEL_ENV_PATH
 from load_prompts import load_prompts
 from render_prompt import render_prompt
 
-load_dotenv()
+load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
 # GCP settings
 GCP_LOCATION = os.getenv("GCP_LOCATION")

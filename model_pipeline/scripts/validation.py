@@ -1,7 +1,10 @@
 import spacy
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from config import LABELED_CSV, PREDICTED_CSV  # Use paths from config.py
+from config import (
+    LABELED_SAMPLE_CSV_PATH,
+    PREDICTED_SAMPLE_CSV_PATH,
+)  # Use paths from config.py
 import mlflow
 import numpy as np
 from bert_score import score as bert_score
@@ -71,10 +74,8 @@ def calculate_action_item_similarity(pred_text, true_text):
     return final_score
 
 
-def validate_outputs(predicted):
+def validate_outputs(predicted_outputs_df, labeled_output_df):
     """Compare predicted outputs with labeled data using BERTScore and Named Entity Matching for action items."""
-
-    labeled_df = pd.read_csv(LABELED_CSV)
 
     results = {
         "summary": defaultdict(list),
@@ -90,13 +91,15 @@ def validate_outputs(predicted):
     matched_count = 0
     counter = 0
 
-    for _, row in labeled_df.iterrows():
+    for _, row in labeled_output_df.iterrows():
         msg_id = row["Message-ID"]
 
-        if msg_id in predicted["Message-ID"].values:
+        if msg_id in predicted_outputs_df["Message-ID"].values:
             matched_count += 1
             for task in results.keys():
-                pred = predicted.loc[predicted["Message-ID"] == msg_id, task].values[0]
+                pred = predicted_outputs_df.loc[
+                    predicted_outputs_df["Message-ID"] == msg_id, task
+                ].values[0]
                 true = row[task]
 
                 if task == "action_item":
@@ -106,20 +109,18 @@ def validate_outputs(predicted):
                     else:
                         final_score = calculate_action_item_similarity(pred, true)
                 else:
-                    pass
-                    # # Compute BERTScore for summaries & draft replies
-                    # bert_f1 = calculate_bert_score(pred, true)
-                    # tfidf_sim = calculate_tfidf_similarity(pred, true)
-                    # final_score = (0.8 * bert_f1) + (0.2 * tfidf_sim)  # Weighted similarity
+                    # Compute BERTScore for summaries & draft replies
+                    bert_f1 = calculate_bert_score(pred, true)
+                    tfidf_sim = calculate_tfidf_similarity(pred, true)
+                    final_score = (0.8 * bert_f1) + (
+                        0.2 * tfidf_sim
+                    )  # Weighted similarity
 
                 for threshold in np.arange(0.6, 1.0, 0.05):
-                    if task == "action_item":
-                        results[task][threshold].append(
-                            1 if final_score >= threshold else 0
-                        )
-                        true_labels[task][threshold].append(1)
-                    # results[task][threshold].append(1 if final_score >= threshold else 0)
-                    # true_labels[task][threshold].append(1)
+                    results[task][threshold].append(
+                        1 if final_score >= threshold else 0
+                    )
+                    true_labels[task][threshold].append(1)
 
     print(f"Matched {matched_count} emails for validation.")
     print(f"Counter - {counter}")
@@ -178,13 +179,16 @@ def validate_outputs(predicted):
     return metrics
 
 
-def run_validation():
+def run_validation(predicted_csv_path, labeled_csv_path):
     """Run validation and print results."""
-    print(f"Loading predictions from {PREDICTED_CSV}...")
-    predicted_outputs = pd.read_csv(PREDICTED_CSV)
+    print(f"Loading predictions from {predicted_csv_path}...")
+    predicted_outputs_df = pd.read_csv(predicted_csv_path)
+
+    print(f"Loading labeled data from {labeled_csv_path}...")
+    labeled_outputs_df = pd.read_csv(labeled_csv_path)
 
     print("Running validation...")
-    metrics = validate_outputs(predicted_outputs)
+    metrics = validate_outputs(predicted_outputs_df, labeled_outputs_df)
 
     for task, thresholds in metrics.items():
         for threshold, scores in thresholds.items():
@@ -196,4 +200,4 @@ def run_validation():
 
 
 if __name__ == "__main__":
-    run_validation()
+    run_validation(PREDICTED_SAMPLE_CSV_PATH, LABELED_SAMPLE_CSV_PATH)

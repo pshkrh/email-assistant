@@ -2,16 +2,15 @@
 import os
 import json
 import mlflow
+from dotenv import load_dotenv
 from load_prompts import load_prompts
 from render_criteria import render_criteria
 from google.auth import load_credentials_from_file
 import vertexai
 from vertexai.generative_models import GenerativeModel
-from config import SERVICE_ACCOUNT_FILE, RANKER_CRITERIA_YAML
+from config import SERVICE_ACCOUNT_FILE, RANKER_CRITERIA_YAML, MODEL_ENV_PATH
 
-"""
-criteria prompts
-"""
+load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
 # GCP settings
 GCP_LOCATION = os.getenv("GCP_LOCATION")

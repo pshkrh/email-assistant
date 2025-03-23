@@ -13,8 +13,7 @@ def load_structure_rules(yaml_file_path):
     Loads structure rules from a YAML file and returns them as a dictionary.
     """
     with open(yaml_file_path, "r") as file:
-        rules = yaml.safe_load(file)
-    return rules
+        return yaml.safe_load(file)
 
 
 def verify_structure(output, task, rules):

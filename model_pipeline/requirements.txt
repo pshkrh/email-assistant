@@ -1,0 +1,23 @@
+numpy
+pandas
+great_expectations
+dvc[gs]
+pytest
+pytest-mock
+pytest-pylint
+apache-airflow[celery]==2.10.5 --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.8.txt"
+tqdm
+python-dotenv
+google-auth-oauthlib
+google-api-python-client
+flask
+flask_cors
+mlflow
+jinja2
+vertexai
+fuzzywuzzy
+nltk
+rouge-score
+bert-score
+spacy==3.8.3
+# blis  # Pin to a version with ARM64 pre-built wheel
