@@ -3,6 +3,7 @@
 1. [Installation & Prerequisites](#installation--prerequisites)
 2. [Model Pipeline Overview](#model-pipeline-overview)
 3. [Code Structure](#code-structure)
+4. [Bias Mitigation](#bias-mitigation)
 
 # Installation & Prerequisites
 
@@ -72,3 +73,12 @@
       - validation.py: Validates labeled and predicted data
 
 ---
+
+# Bias Mitigation
+
+- We detected biasness in LLM output for body lengths
+  - To mitigate we created data for different lengths with equal quantity
+- Tested if it gives different output for different roles
+- Kept equal data with and without subject
+- Kept equal data with and without action_items
+- Kept equal data with unknown email id
