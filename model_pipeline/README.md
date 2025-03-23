@@ -47,8 +47,7 @@
 - Create .env in model_pipeline/ folder, check .env_sample
 
 4. Run Docker
-   - Build Image, docker build -t <IMAGE_NAME> .
-   - Run Container, docker run -it --name=<CONTAINER_NAME> <IMAGE_NAME_YOU_GAVE>
+   - docker compose up --build
 
 # Code Structure
 
