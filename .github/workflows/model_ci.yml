@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "model_pipeline/**"
+  workflow_dispatch: # Allow manual trigger via GitHub UI
+
 jobs:
   train-and-validate:
     runs-on: ubuntu-latest
