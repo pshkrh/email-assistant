@@ -28,7 +28,7 @@ action_items:
     - "^[ \t]*-[ \t]+"       # Matches lines starting with "-"
     - "^[ \t]*\\*[ \t]+"     # Matches lines starting with "*"
     - "^[ \t]*\\d+\\.[ \t]+" # Matches lines starting with "1."
-    - "^(?![ \t]*[-*\\d\\.])[^\s].*"  # Matches any non-empty line that does not start with "-", "*", or a digit+"."
+    - "^(?![ \t]*[-*\\d\\.])[^\\s].*"  # Matches any non-empty line that does not start with "-", "*", or a digit+"."
 
   prohibited_phrases:
     - "Dear"
