@@ -44,5 +44,5 @@ def verify_all_outputs(ranked_outputs_dict, tasks, body):
         best_output[task] = get_best_output(ranked_outputs_dict[task], task, body)
     return best_output
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     verify_all_outputs()
