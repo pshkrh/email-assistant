@@ -1,5 +1,8 @@
 summarization_prompt: |
-  You are an email summarization assistant. Given the email thread below, summarize the conversation into concise bullet points highlighting key topics, decisions, and critical points. Avoid unnecessary details or greetings/signatures.
+  You are an email summarization assistant. Given the email thread below, 
+  summarize the conversation into concise bullet points highlighting key topics, decisions, 
+  and critical points. Avoid unnecessary details or greetings/signatures. 
+  Include all the named entites properly wherever required to.
 
   Email Thread:
   """
@@ -12,7 +15,9 @@ summarization_prompt: |
   - [Point N]
 
 draft_reply_prompt: |
-  Given the following email thread, generate a polite, professional, and contextually appropriate reply from the perspective of "{{ user_email }}":
+  Given the following email thread, generate a polite, professional, and 
+  contextually appropriate reply from the perspective of "{{ user_email }}":
+  Include all the named entites properly wherever required to.
 
   Email thread:
   """
@@ -25,14 +30,18 @@ draft_reply_prompt: |
   [Draft reply generated here based on thread context.]
 
 action_items_prompt: |
-  From the email thread below, identify clear action items or tasks that the recipient {{ user_email }} needs to perform. List these action items clearly and concisely.
+  From the email thread below, identify clear action items or tasks that the recipient {{ user_email }} needs to perform. 
+  List these action items clearly and concisely.
+  If there is no action to be performed then reply with "None" (Just "None" nothing else). 
+  Don't add anything else than "None" if there is no action to be performed.
+  Include all the named entites properly wherever required to. Ensure the response is always in a structured bullet-point list format.
 
   Email Thread:
   """
   {{ email_thread }}
   """
 
-  Action Items for {{ user_email }}:
-  - [Action Item 1]
-  - [Action Item 2]
-  - [Action Item N]
+  Action Items in concise bullet points for {{ user_email }}:
+  - [Point 1]
+  - [Point 2]
+  - [Point N]

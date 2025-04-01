@@ -25,3 +25,4 @@ data_pipeline/tests/data/true_csv/*
 .dvc/
 venv/
 mlruns/
+.mail_mate_credentials.json
