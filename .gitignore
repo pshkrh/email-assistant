@@ -23,5 +23,8 @@ dags/data_pipeline/gx/
 logs/*
 data_pipeline/tests/data/true_csv/*
 .dvc/
+<<<<<<< HEAD
 venv/
+=======
+>>>>>>> f1bec554b0f0928a856f3f5fd14147a4601d2138
 mlruns/

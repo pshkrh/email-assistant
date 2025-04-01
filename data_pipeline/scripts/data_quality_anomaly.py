@@ -12,7 +12,7 @@ Functions:
     send_email_notification(subject, body, to_email, oauth_config, logger):
         Sends an email alert about detected anomalies.
     
-    handle_anomalies(validation_results, path, logger_name):
+    handle_anomalies(validation_results, log_path, logger_name):
         Logs anomalies and triggers email alerts when required.
 
 """
@@ -89,16 +89,16 @@ def send_email_notification(subject, body, to_email, oauth_config, data_anomaly_
         return False
 
 
-def handle_anomalies(validation_results, path, logger_name):
+def handle_anomalies(validation_results, log_path, logger_name):
     """
     Handles detected anomalies by logging details and sending email notifications.
 
     Parameters:
         validation_results (dict): Validation results containing anomaly details.
-        path (str): Path for logging.
+        log_path (str): Path for logging.
         logger_name (str): Name of the logger.
     """
-    data_anomaly_logger = create_logger(path, logger_name)
+    data_anomaly_logger = create_logger(log_path, logger_name)
     try:
         anomalies = [
             result for result in validation_results["results"] if not result["success"]

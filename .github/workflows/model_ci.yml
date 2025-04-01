@@ -1,0 +1,36 @@
+name: Model Training and Deployment CI/CD
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "model_pipeline/**"
+  workflow_dispatch: # Allow manual trigger via GitHub UI
+
+jobs:
+  train-and-validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          cd model_pipeline
+          pip install -r requirements.txt
+          python -m spacy download en_core_web_sm
+      
+      - name: Validate Model
+        run: |
+          cd model_pipeline && python scripts/validation.py
+
+      - name: Bias Checker
+        run: |
+          cd model_pipeline && python scripts/bias_checker.py
