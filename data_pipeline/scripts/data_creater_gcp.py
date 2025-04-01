@@ -50,29 +50,26 @@ def load_prompts(filename):
 def render_prompt(template_str, email_thread):
     """Render a Jinja2 prompt template."""
     template = Template(template_str)
-    return template.render(email_thread=email_thread, user_email="UNKNOWN")
+    return template.render(email_thread=email_thread)
 
 def call_gemini(prompt):
     """Sends a single request to Gemini and expects a structured JSON response."""
     try:
         model = GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002"))
         response = model.generate_content(prompt)
-        
-        response_text = response.text.strip()
 
+        # Extract text response and attempt to parse it as JSON
+        response_text = response.text.strip()
+        
+        # Ensure structured response formatting
         structured_data = json.loads(response_text) if response_text.startswith("{") else {
             "summary": response_text.split("Summary:")[1].split("Suggested Reply:")[0].strip() if "Summary:" in response_text else "No summary",
             "suggested_reply": response_text.split("Suggested Reply:")[1].split("Action Items:")[0].strip() if "Suggested Reply:" in response_text else "No reply",
-            "action_items": [
-                            item.lstrip("-*• ").strip("` ").strip()
-                                for item in response_text.split("Action Items:")[1].strip().split("\n")
-                                if item.strip() and not item.strip().startswith("```")
-                            ] if "Action Items:" in response_text else []
+            "action_items": response_text.split("Action Items:")[1].strip().split("\n") if "Action Items:" in response_text else []
         }
 
-        # Ensure all keys are present
-
         return structured_data
+    
     except json.JSONDecodeError:
         print("Error parsing response from Gemini. Returning default structure.")
         return {
@@ -93,7 +90,7 @@ def call_gemini(prompt):
 # -----------------------------------------------------------------------------
 
 def process_emails(file_key):
-    """Processes up to 10 unprocessed emails and saves only the newly generated rows."""
+    """Processes emails using Gemini model with parallel execution for each CSV file."""
     input_csv = INPUT_FILES[file_key]
     output_csv = os.path.join(OUTPUT_FOLDER, f"processed_{file_key}.csv")
 
@@ -103,23 +100,25 @@ def process_emails(file_key):
 
     print(f"🚀 Processing {file_key} emails from {input_csv}")
 
+    # Load prompts
     prompts = load_prompts("prompts.yaml")
+
+    # Load email data
     df = pd.read_csv(input_csv)
 
+    # Ensure necessary columns exist
     for col in ["Action Label", "Action Type", "Summary", "Suggested Reply"]:
         if col not in df.columns:
             df[col] = ""
 
-    processed_rows = []
-    count = 0
-
+    # Process each email
     for index, row in tqdm(df.iterrows(), total=len(df), desc=f"Processing {file_key} Emails"):
-        
         if pd.notna(row["Summary"]) and pd.notna(row["Suggested Reply"]) and pd.notna(row["Action Label"]):
-            continue
+            continue  # Skip already processed rows
 
         email_thread = f"Subject: {row['Subject']}\n\n{row['Body']}"
 
+        # Create a single structured request by merging all prompts
         full_prompt = f"""
         {render_prompt(prompts["summarization_prompt"], email_thread)}
 
@@ -137,54 +136,45 @@ def process_emails(file_key):
         ```
         """
 
+        # Call Gemini API once and parse response
         response_data = call_gemini(full_prompt)
 
-        row["Summary"] = response_data.get("summary", "No summary provided.")
-        row["Suggested Reply"] = response_data.get("suggested_reply", "No reply generated.")
-        row["Action Type"] = "; ".join(response_data.get("action_items", []))
-        row["Action Label"] = "Generated"
+        # Extract structured responses
+        df.at[index, "Summary"] = response_data.get("summary", "No summary provided.")
+        df.at[index, "Suggested Reply"] = response_data.get("suggested_reply", "No reply generated.")
+        df.at[index, "Action Type"] = "; ".join(response_data.get("action_items", []))
 
-        processed_rows.append(row)
-        count += 1
+    # Save results
+    df.to_csv(output_csv, index=False)
+    print(f"✅ Processing complete for {file_key}! Results saved to '{output_csv}'")
 
-    if processed_rows:
-        pd.DataFrame(processed_rows).to_csv(output_csv, index=False)
-        print(f"✅ Saved {len(processed_rows)} processed rows to '{output_csv}'")
-        return output_csv
-    else:
-        print("⚠️ No new rows were processed.")
-        return None
+    return output_csv
 
 # -----------------------------------------------------------------------------
-# Merge and Run
+# Run Parallel Processing
 # -----------------------------------------------------------------------------
-
-def merge_csv_files(file_list):
-    """Merges multiple processed CSV files into one, replacing empty cells with 'none'."""
-    if not file_list:
-        print("❌ No files to merge!")
-        return
-
-    combined_df = pd.concat([pd.read_csv(file) for file in file_list if file], ignore_index=True)
-
-    # Replace NaN with 'none'
-    combined_df = combined_df.fillna("None")
-
-    # Replace empty strings or whitespace-only strings with 'none'
-    combined_df = combined_df.applymap(lambda x: "none" if isinstance(x, str) and x.strip() == "" else x)
-
-    combined_df.to_csv(FINAL_OUTPUT_CSV, index=False)
-    print(f"\n✅ All processed emails merged into {FINAL_OUTPUT_CSV}")
 
 def run_parallel_processing():
     """Runs email processing for all files in parallel and merges results."""
     with Pool(processes=len(INPUT_FILES)) as pool:
         output_files = pool.map(process_emails, INPUT_FILES.keys())
 
-    merge_csv_files(output_files)
+    # Merge results into a single CSV file
+    merge_csv_files([f for f in output_files if f is not None])
+
+def merge_csv_files(file_list):
+    """Merges multiple processed CSV files into one."""
+    if not file_list:
+        print("❌ No files to merge!")
+        return
+
+    combined_df = pd.concat([pd.read_csv(file) for file in file_list], ignore_index=True)
+    combined_df.to_csv(FINAL_OUTPUT_CSV, index=False)
+    
+    print(f"\n✅ All processed emails merged into {FINAL_OUTPUT_CSV}")
 
 # -----------------------------------------------------------------------------
-# Main
+# Run the Script
 # -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
