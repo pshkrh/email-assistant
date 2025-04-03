@@ -13,4 +13,4 @@ RUN pip install --no-cache-dir thinc==8.3.2
 RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download en_core_web_sm
 COPY . .
-CMD ["python", "scripts/main.py"]
+CMD ["python", "scripts/fetch_gmail_threads.py"]
