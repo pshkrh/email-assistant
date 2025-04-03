@@ -21,7 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 #     },
 # )
 # CORS(app)
-CORS(app, resources={r"/fetch_gmail_thread": {"origins": "chrome-extension://*"}})
+# CORS(app, resources={r"/fetch_gmail_thread": {"origins": "chrome-extension://*"}})
+
+CORS(
+    app,
+    resources={
+        r"/fetch_gmail_thread": {
+            "origins": ["chrome-extension://agmojfdfhghpgmklbbdijhihdheihnda"],
+            "methods": ["POST"],
+            "allow_headers": ["Authorization", "Content-Type"],
+        }
+    },
+)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CREDENTIALS_FILE = GMAIL_API_CREDENTIALS
@@ -96,20 +107,62 @@ def fetch_gmail_thread():
     data = request.get_json()
     thread_id = data.get("threadId")
     email = data.get("email")
-    """
-    Todo:
-        get specific feature user wants to perform
-            pass it to llm generator process_email_body as a list
-    """
+
+    # Get token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing or invalid authorization"}), 401
+
+    token = auth_header.split(" ")[1]
 
     try:
-        messages = process_thread(email, thread_id)
+        # Create credentials from the token
+        from google.oauth2.credentials import Credentials
+
+        credentials = Credentials(token=token)
+
+        # Build Gmail service with the credentials
+        service = build("gmail", "v1", credentials=credentials)
+
+        # Fetch thread data using the existing code structure
+        thread_data = service.users().threads().get(userId="me", id=thread_id).execute()
+
+        thread = thread_data.get("messages", [])[-1]
+        messages = []
+        payload = thread["payload"]
+        headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+
+        body = None
+        if "parts" in payload:
+            for part in payload["parts"]:
+                if part["mimeType"] == "text/plain":
+                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode(
+                        "utf-8", "ignore"
+                    )
+                    break
+        elif "body" in payload:
+            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
+                "utf-8", "ignore"
+            )
+
+        messages.append(
+            {
+                "Message-ID": headers.get("Message-ID", "N/A"),
+                "Date": headers.get("Date", "N/A"),
+                "From": headers.get("From", "N/A"),
+                "To": headers.get("To", "N/A"),
+                "Subject": headers.get("Subject", "N/A"),
+                "Body": body or "No readable body",
+            }
+        )
 
         return jsonify({"threadId": thread_id, "messages": messages})
     except Exception as e:
-        return jsonify({"error": "Missing thread ID or email"}), 400
+        app.logger.error(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 400
 
 
 if __name__ == "__main__":
     print("Starting server")
-    app.run(port=8000, debug=True)
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=8000, debug=False)
