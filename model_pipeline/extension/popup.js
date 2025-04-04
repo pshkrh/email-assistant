@@ -49,6 +49,7 @@ document.getElementById("fetchButton").addEventListener("click", () => {
 
 function formatThreadData(data) {
   let output = `Thread ID: ${data.threadId}\n\n`;
+  output += `Messages: ${data.messages || "N/A"}\n`;
   output += `Summary: ${data.summary || "N/A"}\n`;
   output += `Action Items: ${data.action_items || "N/A"}\n`;
   output += `Draft Reply: ${data.draft_reply || "N/A"}\n`;

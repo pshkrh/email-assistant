@@ -135,7 +135,7 @@ def fetch_gmail_thread():
                 Save it to db with table_docid
         """
 
-        return jsonify({"threadId": thread_id, "messages": data.get("body", "")})
+        return jsonify({"threadId": thread_id, "messages": data.get("userEmail", "")})
     except Exception as e:
         return jsonify({"error": "Missing thread ID or email"}), 400
 
