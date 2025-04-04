@@ -163,7 +163,7 @@ function fetchThreadData(token, threadId, email, sendResponse) {
 
       console.log("Data: ", data);
 
-      fetch("http://localhost:8000/fetch_gmail_thread", {
+      fetch("https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
