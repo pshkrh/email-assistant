@@ -17,6 +17,19 @@ class Logger {
 
 const logger = new Logger();
 
+document.getElementById("testAuth").addEventListener("click", () => {
+  console.clear(); // Clear previous logs
+  console.log("Testing OAuth only...");
+
+  chrome.identity.getAuthToken({ interactive: true, scopes: ["https://www.googleapis.com/auth/gmail.readonly"] }, (token) => {
+    if (chrome.runtime.lastError) {
+      console.error("AUTH ERROR:", chrome.runtime.lastError.message);
+    } else {
+      console.log("TOKEN SUCCESS:", token.substring(0, 5) + "...");
+    }
+  });
+});
+
 document.getElementById("fetchButton").addEventListener("click", () => {
   const status = document.getElementById("status");
   const result = document.getElementById("result");
@@ -64,33 +77,53 @@ document.getElementById("fetchButton").addEventListener("click", () => {
         }
 
         logger.log(`Thread ID: ${threadId}, Email: ${email}`);
+        logger.log("Requesting Gmail API access token...");
 
-        fetch("http://localhost:8000/fetch_gmail_thread", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ threadId, email }),
-        })
-          .then((response) => {
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-          })
-          .then((data) => {
-            if (data.error) {
-              status.textContent = `Error: ${data.error}`;
-              logger.log(`Backend error: ${data.error}`);
-            } else {
-              status.textContent = "Thread fetched successfully!";
-              result.textContent = formatThreadData(data);
-              logger.log("Thread data fetched successfully");
-            }
-          })
-          .catch((error) => {
-            status.textContent = "Error: Failed to fetch thread";
-            logger.log(`Fetch error: ${error.message}`);
-          })
-          .finally(() => {
+        // Get the OAuth token
+        chrome.identity.getAuthToken({ interactive: true }, function (token) {
+          if (chrome.runtime.lastError) {
+            status.textContent = "Auth Error: " + chrome.runtime.lastError.message;
+            logger.log("OAuth Error: " + chrome.runtime.lastError.message);
             fetchButton.disabled = false;
-          });
+            return;
+          }
+
+          logger.log("Token obtained successfully");
+
+          // Replace localhost with your Cloud Run URL when deploying
+          const apiUrl = "https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread";
+
+          // Make the request to your backend with the OAuth token
+          fetch(apiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + token
+            },
+            body: JSON.stringify({ threadId, email }),
+          })
+            .then((response) => {
+              if (!response.ok) throw new Error(`HTTP ${response.status}`);
+              return response.json();
+            })
+            .then((data) => {
+              if (data.error) {
+                status.textContent = `Error: ${data.error}`;
+                logger.log(`Backend error: ${data.error}`);
+              } else {
+                status.textContent = "Thread fetched successfully!";
+                result.textContent = formatThreadData(data);
+                logger.log("Thread data fetched successfully");
+              }
+            })
+            .catch((error) => {
+              status.textContent = "Error: Failed to fetch thread";
+              logger.log(`Fetch error: ${error.message}`);
+            })
+            .finally(() => {
+              fetchButton.disabled = false;
+            });
+        });
       }
     );
   });

@@ -1,16 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "Gmail Thread Explorer",
+  "name": "MailMate",
   "version": "1.0",
   "description": "Fetch and display Gmail thread details with ease",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "identity"
   ],
   "content_scripts": [
     {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": [
+        "content.js"
+      ]
     }
   ],
   "action": {
@@ -21,5 +26,13 @@
       "128": "icon.png"
     }
   },
-  "host_permissions": ["http://localhost:5000/*"]
+  "host_permissions": [
+    "https://email-assistant-673808915782.us-central1.run.app/*"
+  ],
+  "oauth2": {
+    "client_id": "673808915782-pau7arcr0antlamnls130bb419kf66vc.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly"
+    ]
+  }
 }
