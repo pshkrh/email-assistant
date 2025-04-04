@@ -20,4 +20,5 @@ nltk
 rouge-score
 bert-score
 spacy==3.8.3
+psycopg2
 # blis  # Pin to a version with ARM64 pre-built wheel

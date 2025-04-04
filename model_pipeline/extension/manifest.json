@@ -5,7 +5,10 @@
   "description": "Fetch and display Gmail thread details with ease",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "identity",
+    "scripting",
+    "tabs"
   ],
   "content_scripts": [
     {
@@ -13,6 +16,9 @@
       "js": ["content.js"]
     }
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -21,5 +27,16 @@
       "128": "icon.png"
     }
   },
-  "host_permissions": ["http://localhost:5000/*"]
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://accounts.google.com/*",
+    "https://gmail.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "673808915782-hgbcr3o8tjjct8pvgej9uq4599pc4k0g.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/userinfo.email"
+    ]
+  }
 }
