@@ -16,24 +16,14 @@ app = Flask(__name__)
 
 logging.basicConfig(level=logging.DEBUG)
 
-# CORS(
-#     app,
-#     resources={
-#         r"/fetch_gmail_thread": {
-#             "origins": "chrome-extension://aelnladbenlanifdljmagnljckohcohe"
-#         }
-#     },
-# )
-# CORS(app)
-# CORS(app, resources={r"/fetch_gmail_thread": {"origins": "chrome-extension://*"}})
-
 CORS(
     app,
     resources={
         r"/fetch_gmail_thread": {
-            "origins": ["chrome-extension://agmojfdfhghpgmklbbdijhihdheihnda"],
-            "methods": ["POST"],
+            "origins": ["chrome-extension://*"],  # Allow any extension
+            "methods": ["POST", "OPTIONS"],
             "allow_headers": ["Authorization", "Content-Type"],
+            "supports_credentials": True,
         }
     },
 )
