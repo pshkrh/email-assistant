@@ -7,6 +7,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from flask_cors import CORS
 from config import GMAIL_API_CREDENTIALS, TOKEN_DIR
+from llm_generator import process_email_body
+from llm_ranker import rank_all_outputs
+from output_verifier import verify_all_outputs
+from save_to_database import save_to_db
 
 app = Flask(__name__)
 
@@ -68,6 +72,7 @@ def process_thread(email, thread_id):
     service = authenticate_gmail(email)
     thread_data = service.users().threads().get(userId="me", id=thread_id).execute()
 
+    messages_count = len(thread_data.get("messages", []))
     thread = thread_data.get("messages", [])[-1]
     messages = []
     payload = thread["payload"]
@@ -94,6 +99,7 @@ def process_thread(email, thread_id):
             "To": headers.get("To", "N/A"),
             "Subject": headers.get("Subject", "N/A"),
             "Body": body or "No readable body",
+            "MessagesCount": messages_count,
         }
     )
 
@@ -105,58 +111,42 @@ def fetch_gmail_thread():
     """Fetch email thread details for a given thread ID."""
     app.logger.info("Request Received...")
     data = request.get_json()
+    # TODO: tasks = data.get("tasks") [list of tasks user wants to perform]
+    required_fields = ["userEmail", "messageId", "threadId", "messagesCount"]
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
     thread_id = data.get("threadId")
     email = data.get("email")
 
-    # Get token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        return jsonify({"error": "Missing or invalid authorization"}), 401
-
-    token = auth_header.split(" ")[1]
-
     try:
-        # Create credentials from the token
-        from google.oauth2.credentials import Credentials
+        # messages = process_thread(email, thread_id)
 
-        credentials = Credentials(token=token)
+        # print(messages)
 
-        # Build Gmail service with the credentials
-        service = build("gmail", "v1", credentials=credentials)
+        # llm_generator_output = process_email_body(
+        #     body=messages[0]["Body"], tasks=[""], user_email=email
+        # )
+        # llm_ranker_output = rank_all_outputs(
+        #     llm_outputs=llm_generator_output, tasks=[""], body=messages[0]["Body"]
+        # )
+        # best_output = verify_all_outputs(
+        #     ranked_outputs_dict=llm_ranker_output, tasks=[""], userEmail=email
+        # )
 
-        # Fetch thread data using the existing code structure
-        thread_data = service.users().threads().get(userId="me", id=thread_id).execute()
+        # table_docid = save_to_db(
+        #     user_email=email,
+        #     message_data=messages[0],
+        #     thread_id=thread_id,
+        #     best_output=best_output,
+        # )
 
-        thread = thread_data.get("messages", [])[-1]
-        messages = []
-        payload = thread["payload"]
-        headers = {h["name"]: h["value"] for h in payload.get("headers", [])}
+        """
+        After return responses
+            If user responds for each task performed
+                Save it to db with table_docid
+        """
 
-        body = None
-        if "parts" in payload:
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/plain":
-                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                        "utf-8", "ignore"
-                    )
-                    break
-        elif "body" in payload:
-            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode(
-                "utf-8", "ignore"
-            )
-
-        messages.append(
-            {
-                "Message-ID": headers.get("Message-ID", "N/A"),
-                "Date": headers.get("Date", "N/A"),
-                "From": headers.get("From", "N/A"),
-                "To": headers.get("To", "N/A"),
-                "Subject": headers.get("Subject", "N/A"),
-                "Body": body or "No readable body",
-            }
-        )
-
-        return jsonify({"threadId": thread_id, "messages": messages})
+        return jsonify({"threadId": thread_id, "messages": data.get("userEmail", "")})
     except Exception as e:
         app.logger.error(f"Error: {str(e)}")
         return jsonify({"error": str(e)}), 400

@@ -41,3 +41,10 @@ FLASK_PORT = 8000
 # MLflow Configuration
 MLFLOW_LOG_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "logs")
 MLFLOW_EXPERIMENT_NAME = "MailMate_Email_Assistant"
+
+# DB configurations
+DB_NAME = ("mail_mate_user_data",)
+USER = ("postgres",)
+PASSWORD = ("postgres",)
+HOST = ("35.226.149.135",)
+PORT = "5432"
