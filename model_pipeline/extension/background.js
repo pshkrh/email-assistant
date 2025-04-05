@@ -4,47 +4,94 @@ const REDIRECT_URI = "https://fdclgicibpkmpihelkmiggcljjnbgfni.chromiumapp.org";
 const SCOPES =
   "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email";
 
-function getAuthToken(callback) {
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
-    REDIRECT_URI
-  )}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
-  console.log("Auth URL:", authUrl);
+function getAuthToken(userEmail, callback) {
+  chrome.storage.local.get("userTokens", (result) => {
+    const userTokens = result.userTokens || {};
+    const now = Date.now();
+    const userTokenData = userTokens[userEmail];
 
-  chrome.identity.launchWebAuthFlow(
-    {
-      url: authUrl,
-      interactive: true,
-    },
-    (redirectUrl) => {
-      if (chrome.runtime.lastError || !redirectUrl) {
-        console.error(
-          "Auth error:",
-          chrome.runtime.lastError || "No redirect URL returned"
-        );
-        callback(null);
-        return;
-      }
-      console.log("Redirect URL:", redirectUrl);
-      const hash = new URL(redirectUrl).hash;
-      if (!hash) {
-        console.error("No hash in redirect URL");
-        callback(null);
-        return;
-      }
-      const params = hash.slice(1).split("&");
-      const tokenParam = params.find((param) =>
-        param.startsWith("access_token=")
+    if (
+      userTokenData &&
+      userTokenData.authToken &&
+      userTokenData.tokenExpiry &&
+      now < userTokenData.tokenExpiry
+    ) {
+      console.log(
+        `Using cached token for ${userEmail}:`,
+        userTokenData.authToken.substring(0, 5) + "..."
       );
-      if (!tokenParam) {
-        console.error("No access_token in redirect URL:", hash);
-        callback(null);
-        return;
-      }
-      const token = tokenParam.split("=")[1];
-      console.log("Token:", token);
-      callback(token);
+      callback(userTokenData.authToken);
+      return;
     }
-  );
+
+    // No valid token for this email, perform OAuth
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
+      REDIRECT_URI
+    )}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
+    console.log("Auth URL for", userEmail, ":", authUrl);
+
+    chrome.identity.launchWebAuthFlow(
+      {
+        url: authUrl,
+        interactive: true,
+      },
+      (redirectUrl) => {
+        if (chrome.runtime.lastError || !redirectUrl) {
+          console.error(
+            "Auth error for",
+            userEmail,
+            ":",
+            chrome.runtime.lastError || "No redirect URL returned"
+          );
+          callback(null);
+          return;
+        }
+        console.log("Redirect URL for", userEmail, ":", redirectUrl);
+        const hash = new URL(redirectUrl).hash;
+        if (!hash) {
+          console.error("No hash in redirect URL for", userEmail);
+          callback(null);
+          return;
+        }
+        const params = hash.slice(1).split("&");
+        const tokenParam = params.find((param) =>
+          param.startsWith("access_token=")
+        );
+        if (!tokenParam) {
+          console.error(
+            "No access_token in redirect URL for",
+            userEmail,
+            ":",
+            hash
+          );
+          callback(null);
+          return;
+        }
+        const token = tokenParam.split("=")[1];
+        const expiresIn = parseInt(
+          params.find((p) => p.startsWith("expires_in="))?.split("=")[1] ||
+            "3600",
+          10
+        );
+        const expiryTime = Date.now() + expiresIn * 1000;
+
+        // Update userTokens object
+        userTokens[userEmail] = {
+          authToken: token,
+          tokenExpiry: expiryTime,
+        };
+        chrome.storage.local.set({ userTokens }, () => {
+          console.log(
+            `Token saved for ${userEmail}:`,
+            token.substring(0, 5) + "...",
+            "Expires at:",
+            new Date(expiryTime)
+          );
+          callback(token);
+        });
+      }
+    );
+  });
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -56,7 +103,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ error: "Please open a Gmail tab" });
         return;
       }
-      // Prefer the active tab if available, otherwise use the first Gmail tab
       const activeTab = tabs.find((tab) => tab.active) || tabs[0];
       const tabId = activeTab.id;
       console.log("Selected tab ID:", tabId, "URL:", activeTab.url);
@@ -91,7 +137,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   "Email:",
                   response.email
                 );
-                getAuthToken((token) => {
+                getAuthToken(response.email, (token) => {
                   if (token) {
                     fetchThreadData(
                       token,
@@ -100,7 +146,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                       sendResponse
                     );
                   } else {
-                    console.error("❌ Failed to get auth token");
+                    console.error(
+                      "❌ Failed to get auth token for",
+                      response.email
+                    );
                     sendResponse({ error: "Failed to get auth token" });
                   }
                 });
@@ -129,7 +178,36 @@ function fetchThreadData(token, threadId, email, sendResponse) {
   fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-    .then((res) => res.json())
+    .then((res) => {
+      if (!res.ok) {
+        if (res.status === 401) {
+          chrome.storage.local.get("userTokens", (result) => {
+            const userTokens = result.userTokens || {};
+            delete userTokens[email]; // Remove invalid token
+            chrome.storage.local.set({ userTokens }, () => {
+              console.log(
+                "Invalid token for",
+                email,
+                "detected, cleared cache, retrying auth..."
+              );
+              getAuthToken(email, (newToken) => {
+                if (newToken) {
+                  fetchThreadData(newToken, threadId, email, sendResponse);
+                } else {
+                  sendResponse({ error: "Failed to refresh auth token" });
+                }
+              });
+            });
+          });
+          return;
+        }
+        if (res.status === 404) {
+          throw new Error(`Thread not found (ID: ${threadId})`);
+        }
+        throw new Error(`HTTP error: ${res.status}`);
+      }
+      return res.json();
+    })
     .then((threadData) => {
       const message = threadData.messages[threadData.messages.length - 1];
       const headers = message.payload.headers.reduce(
@@ -150,20 +228,20 @@ function fetchThreadData(token, threadId, email, sendResponse) {
       }
 
       const data = {
-        userEmail: email,
-        messageId: message.id,
-        date: headers["Date"],
-        from: headers["From"],
-        to: headers["To"],
-        subject: headers["Subject"],
-        body: body || "No readable body",
-        messagesCount: threadData.messages.length,
-        threadId: threadId,
+        userEmail: email || null,
+        messageId: message.id || null,
+        date: headers["Date"] || null,
+        from: headers["From"] || null,
+        to: headers["To"] || null,
+        subject: headers["Subject"] || null,
+        body: body || null,
+        messagesCount: threadData.messages.length || null,
+        threadId: threadId || null,
       };
 
-      console.log("Data: ", data);
+      console.log("Data:", data);
 
-      fetch("https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread", {
+      fetch("http://127.0.0.1:8000/fetch_gmail_thread", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -177,11 +255,11 @@ function fetchThreadData(token, threadId, email, sendResponse) {
         })
         .catch((err) => {
           console.error("🚨 Fetch error:", err);
-          sendResponse({ error: "Fetch error" });
+          sendResponse({ error: "Server fetch error: " + err.message });
         });
     })
     .catch((err) => {
       console.error("🚨 Gmail API error:", err);
-      sendResponse({ error: "Gmail API error" });
+      sendResponse({ error: "Gmail API error: " + err.message });
     });
 }
