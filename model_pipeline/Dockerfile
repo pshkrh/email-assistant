@@ -10,7 +10,8 @@ ENV BLIS_ARCH=generic
 
 RUN pip install --upgrade pip && \
     grep -v bert-score requirements.txt > requirements_filtered.txt && \
-    pip install --no-cache-dir blis==0.7.11 thinc==8.3.2 && \
+    pip install --no-cache-dir blis==0.7.11 && \ 
+    pip install --no-cache-dir thinc==8.3.2 && \
     pip install torch==2.6.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements_filtered.txt && \
     pip install bert-score && \
