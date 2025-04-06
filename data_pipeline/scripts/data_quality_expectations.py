@@ -8,6 +8,7 @@ Functions:
     define_expectations(csv_path, context_root_dir, log_path, logger_name)
 """
 
+import os
 import great_expectations as gx
 import pandas as pd
 
@@ -26,13 +27,38 @@ def define_expectations(csv_path, context_root_dir, log_path, logger_name):
 
     Returns:
         gx.ExpectationSuite: Configured expectation suite.
+
+    Raises:
+        ValueError: If input parameters are invalid.
+        FileNotFoundError: If the CSV file doesn't exist.
+        pd.errors.EmptyDataError: If the CSV file is empty or contains no data.
+        gx.exceptions.ExpectationSuiteError: If suite creation fails.
+        Exception: For unexpected errors.
     """
+    if not all([csv_path, context_root_dir, log_path, logger_name]):
+        raise ValueError("One or more input parameters are empty")
+
     data_quality_logger = create_logger(log_path, logger_name)
-    context = gx.get_context(context_root_dir=context_root_dir)
+
+    if not os.path.exists(csv_path):
+        error_message = f"CSV file not found: {csv_path}"
+        data_quality_logger.error(error_message)
+        raise FileNotFoundError(error_message)
+
+    if os.path.getsize(csv_path) == 0:
+        error_message = f"CSV file is empty: {csv_path}"
+        data_quality_logger.error(error_message)
+        raise pd.errors.EmptyDataError(error_message)
+
     try:
+        context = gx.get_context(context_root_dir=context_root_dir)
         data_quality_logger.info("Setting up Expectations in Suite")
 
         df = pd.read_csv(csv_path)
+        if df.empty:
+            error_message = f"CSV file contains no data: {csv_path}"
+            data_quality_logger.error(error_message)
+            raise pd.errors.EmptyDataError(error_message)
 
         suite = gx.ExpectationSuite(name="enron_expectation_suite")
         suite = context.suites.add_or_update(suite)
@@ -127,7 +153,33 @@ def define_expectations(csv_path, context_root_dir, log_path, logger_name):
 
         data_quality_logger.info("Created Expectation Suite successfully")
         return suite
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        error_message = f"Error in Expectations: {e}"
+
+    except FileNotFoundError:
+        raise  # Re-raise without additional logging
+    except pd.errors.EmptyDataError:
+        raise  # Re-raise without additional logging
+    except gx.exceptions.ExpectationSuiteError as e:
+        error_message = f"Error creating expectation suite: {e}"
         data_quality_logger.error(error_message, exc_info=True)
-        return None
+        raise
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Unexpected error in defining expectations: {e}"
+        data_quality_logger.error(error_message, exc_info=True)
+        raise
+
+
+if __name__ == "__main__":
+    # Example usage (not typically run standalone)
+    from get_project_root import project_root
+
+    PROJECT_ROOT_DIR = project_root()
+    CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
+    CONTEXT_ROOT_DIR = f"{PROJECT_ROOT_DIR}/data_pipeline/gx"
+    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_quality_log.log"
+    LOGGER_NAME = "data_quality_logger"
+
+    try:
+        SUITE = define_expectations(CSV_PATH, CONTEXT_ROOT_DIR, LOG_PATH, LOGGER_NAME)
+        print("Expectation suite defined successfully.")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Error: {e}")

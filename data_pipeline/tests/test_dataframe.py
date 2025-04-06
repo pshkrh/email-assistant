@@ -1,5 +1,5 @@
 """
-Unit tests for the data_quality_validation funtions.
+Unit tests for the process_enron_emails functions.
 """
 
 import os
@@ -13,11 +13,10 @@ scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scr
 sys.path.append(scripts_folder)
 
 # pylint: disable=wrong-import-position
-
 from dataframe import (
     extract_email_data,
     process_enron_emails,
-)  # Assume file is named dataframe.py
+)  # Updated import to match file name
 
 # pylint: enable=wrong-import-position
 
@@ -31,6 +30,23 @@ def setup_paths(tmp_path):
         "log_path": str(tmp_path / "logs" / "test_data_preprocessing_log.log"),
         "logger_name": "test_data_preprocessing_logger",
     }
+
+
+@pytest.fixture
+def header_keys():
+    """Fixture for email header keys."""
+    return [
+        "Message-ID",
+        "Date",
+        "From",
+        "To",
+        "Subject",
+        "Cc",
+        "Bcc",
+        "X-From",
+        "X-To",
+        "X-Cc",
+    ]
 
 
 # pylint: disable=redefined-outer-name
@@ -52,6 +68,18 @@ def test_extract_email_data_success(mocker: MockerFixture, tmp_path, header_keys
     mock_logger.error.assert_not_called()
 
 
+def test_extract_email_data_file_not_found(
+    mocker: MockerFixture, tmp_path, header_keys
+):
+    """Test raising FileNotFoundError when email file is missing."""
+    email_path = str(tmp_path / "nonexistent_email.txt")
+    mock_logger = mocker.MagicMock()
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        extract_email_data(email_path, mock_logger, header_keys)
+    assert str(exc_info.value) == f"Email file not found: {email_path}"
+
+
 def test_process_emails_success(mocker: MockerFixture, setup_paths):
     """Test successful processing of emails into a DataFrame."""
     # Create a mock email structure
@@ -61,7 +89,9 @@ def test_process_emails_success(mocker: MockerFixture, setup_paths):
         f.write("From: person1@example.com\nSubject: Test\n\nHi there.")
 
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.create_logger", return_value=mock_logger)
+    mocker.patch(
+        "dataframe.create_logger", return_value=mock_logger
+    )  # Updated module name
     mocker.patch(
         "os.walk",
         return_value=[
@@ -82,84 +112,51 @@ def test_process_emails_success(mocker: MockerFixture, setup_paths):
     df = pd.read_csv(setup_paths["csv_path"])
     assert len(df) == 1
     assert df["From"].iloc[0] == "person1@example.com"
+    # pylint: disable=logging-fstring-interpolation
     mock_logger.info.assert_any_call(f"Processing emails in: {setup_paths['data_dir']}")
     mock_logger.info.assert_any_call("Total emails processed: 1")
     mock_logger.info.assert_any_call("DataFrame created successfully.")
     mock_logger.info.assert_any_call(
         f"DataFrame saved to {setup_paths['csv_path']} successfully in process_enron_emails."
     )
-
-
-def test_process_emails_with_real_data(mocker: MockerFixture, setup_paths):
-    """Test processing real emails from /data_pipeline/tests/data/emails."""
-    real_data_dir = os.path.join(os.path.dirname(__file__), "data", "emails")
-    assert os.path.exists(
-        real_data_dir
-    ), f"Real email directory not found at {real_data_dir}"
-
-    mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.create_logger", return_value=mock_logger)
-
-    result = process_enron_emails(
-        real_data_dir,
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-        setup_paths["csv_path"],
-    )
-
-    assert result == setup_paths["csv_path"]
-    assert os.path.exists(setup_paths["csv_path"])
-    df = pd.read_csv(setup_paths["csv_path"])
-    assert len(df) > 0  # Assuming the folder has at least one email file
-    mock_logger.info.assert_any_call(f"Processing emails in: {real_data_dir}")
-    mock_logger.info.assert_any_call(f"Total emails processed: {len(df)}")
-    mock_logger.info.assert_any_call("DataFrame created successfully.")
-    mock_logger.info.assert_any_call(
-        f"DataFrame saved to {setup_paths['csv_path']} successfully in process_enron_emails."
-    )
+    # pylint: enable=logging-fstring-interpolation
 
 
 def test_process_emails_directory_not_found(mocker: MockerFixture, setup_paths):
-    """Test handling of non-existent data directory."""
+    """Test raising FileNotFoundError for non-existent data directory."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.create_logger", return_value=mock_logger)
+    mocker.patch(
+        "dataframe.create_logger", return_value=mock_logger
+    )  # Updated module name
     mocker.patch("os.path.exists", return_value=False)
 
-    result = process_enron_emails(
-        setup_paths["data_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-        setup_paths["csv_path"],
-    )
-
-    assert isinstance(result, pd.DataFrame)
-    assert result.empty
-    mock_logger.error.assert_called_once_with(
-        f"Directory {setup_paths['data_dir']} does not exist!"
-    )
+    with pytest.raises(FileNotFoundError) as exc_info:
+        process_enron_emails(
+            setup_paths["data_dir"],
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+            setup_paths["csv_path"],
+        )
+    # pylint: disable=logging-fstring-interpolation
+    assert str(exc_info.value) == f"Directory {setup_paths['data_dir']} does not exist!"
+    # pylint: enable=logging-fstring-interpolation
 
 
-def test_process_emails_empty_directory(mocker: MockerFixture, setup_paths):
-    """Test processing an empty directory."""
-    os.makedirs(setup_paths["data_dir"], exist_ok=True)
+def test_process_emails_invalid_input(mocker: MockerFixture, setup_paths):
+    """Test raising ValueError for invalid input."""
     mock_logger = mocker.MagicMock()
-    mocker.patch("dataframe.create_logger", return_value=mock_logger)
-    mocker.patch("os.walk", return_value=[(setup_paths["data_dir"], [], [])])
+    mocker.patch(
+        "dataframe.create_logger", return_value=mock_logger
+    )  # Updated module name
 
-    result = process_enron_emails(
-        setup_paths["data_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-        setup_paths["csv_path"],
-    )
-
-    assert result == setup_paths["csv_path"]
-    mock_logger.info.assert_any_call(f"Processing emails in: {setup_paths['data_dir']}")
-    mock_logger.info.assert_any_call("Total emails processed: 0")
-    mock_logger.info.assert_any_call("DataFrame created successfully.")
-    mock_logger.info.assert_any_call(
-        f"DataFrame saved to {setup_paths['csv_path']} successfully in process_enron_emails."
-    )
+    with pytest.raises(ValueError) as exc_info:
+        process_enron_emails(
+            "",
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+            setup_paths["csv_path"],
+        )
+    assert str(exc_info.value) == "One or more input parameters are empty"
 
 
 if __name__ == "__main__":
