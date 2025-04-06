@@ -56,6 +56,18 @@ header p {
   background-color: #373737;
 }
 
+.task-card.disabled {
+  background-color: #202020;
+  transform: none;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.task-card.disabled:hover {
+  transform: none;
+  background-color: #202020;
+}
+
 .task-card input[type="checkbox"] {
   margin-right: 14px;
   accent-color: #d4a017;
@@ -68,6 +80,11 @@ header p {
   font-weight: 400;
   color: #eaeaea;
   cursor: pointer;
+}
+
+.task-card.disabled label {
+  color: #777777;
+  cursor: not-allowed;
 }
 
 button {
@@ -96,6 +113,14 @@ button:disabled {
   box-shadow: none;
 }
 
+#retryButton {
+  background-color: #d4a017;
+}
+
+#retryButton:hover {
+  background-color: #b78c14;
+}
+
 .status {
   margin: 10px 0;
   font-size: 14px;
@@ -116,6 +141,30 @@ button:disabled {
   white-space: pre-wrap;
   line-height: 1.6;
   display: none;
+}
+
+/* Error UI Styles */
+.error-banner {
+  background-color: #8b0000;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 24px;
+  text-align: center;
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(139, 0, 0, 0.5);
+}
+
+.error-title {
+  color: white;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 5px 0;
+}
+
+.error-message {
+  color: #dddddd;
+  font-size: 14px;
+  margin: 0;
 }
 
 .feedback {
