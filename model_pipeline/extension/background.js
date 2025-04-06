@@ -24,7 +24,6 @@ function getAuthToken(userEmail, callback) {
       return;
     }
 
-    // No valid token for this email, perform OAuth
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(
       REDIRECT_URI
     )}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
@@ -75,7 +74,6 @@ function getAuthToken(userEmail, callback) {
         );
         const expiryTime = Date.now() + expiresIn * 1000;
 
-        // Update userTokens object
         userTokens[userEmail] = {
           authToken: token,
           tokenExpiry: expiryTime,
@@ -143,6 +141,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                       token,
                       response.threadId,
                       response.email,
+                      request.tasks, // Pass tasks from popup
                       sendResponse
                     );
                   } else {
@@ -174,7 +173,7 @@ function checkGmailOpen() {
   }
 }
 
-function fetchThreadData(token, threadId, email, sendResponse) {
+function fetchThreadData(token, threadId, email, tasks, sendResponse) {
   fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
@@ -183,7 +182,7 @@ function fetchThreadData(token, threadId, email, sendResponse) {
         if (res.status === 401) {
           chrome.storage.local.get("userTokens", (result) => {
             const userTokens = result.userTokens || {};
-            delete userTokens[email]; // Remove invalid token
+            delete userTokens[email];
             chrome.storage.local.set({ userTokens }, () => {
               console.log(
                 "Invalid token for",
@@ -192,7 +191,13 @@ function fetchThreadData(token, threadId, email, sendResponse) {
               );
               getAuthToken(email, (newToken) => {
                 if (newToken) {
-                  fetchThreadData(newToken, threadId, email, sendResponse);
+                  fetchThreadData(
+                    newToken,
+                    threadId,
+                    email,
+                    tasks,
+                    sendResponse
+                  );
                 } else {
                   sendResponse({ error: "Failed to refresh auth token" });
                 }
@@ -237,9 +242,10 @@ function fetchThreadData(token, threadId, email, sendResponse) {
         body: body || null,
         messagesCount: threadData.messages.length || null,
         threadId: threadId || null,
+        tasks: tasks || [], // Include selected tasks
       };
 
-      console.log("Data:", data);
+      console.log("Data with tasks:", data);
 
       fetch("http://127.0.0.1:8000/fetch_gmail_thread", {
         method: "POST",

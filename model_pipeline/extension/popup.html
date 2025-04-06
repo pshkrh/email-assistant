@@ -2,18 +2,43 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Gmail Thread Explorer</title>
+    <title>MailMate</title>
     <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
   </head>
   <body>
     <div class="container">
-      <h1>Gmail Thread Explorer</h1>
-      <button id="testAuth">Test Auth Only</button>
-      <button id="fetchButton">Fetch Thread</button>
-      <div id="status" class="status"></div>
+      <header>
+        <h1>MailMate</h1>
+        <p>Smart Email Insights</p>
+      </header>
+      <div class="task-container">
+        <div class="task-card">
+          <input type="checkbox" id="summary" checked />
+          <label for="summary">Generate Summary</label>
+        </div>
+        <div class="task-card">
+          <input type="checkbox" id="actionItems" />
+          <label for="actionItems">List Action Items</label>
+        </div>
+        <div class="task-card">
+          <input type="checkbox" id="draftReply" />
+          <label for="draftReply">Draft a Reply</label>
+        </div>
+      </div>
+      <button id="analyzeButton">Analyze Email</button>
+      <div id="status" class="status" style="display: none"></div>
       <div id="result" class="result"></div>
+      <div id="feedback" class="feedback"></div>
       <details>
-        <summary>View Logs</summary>
+        <summary>View Logs <span class="arrow">›</span></summary>
         <pre id="logs" class="logs"></pre>
       </details>
     </div>

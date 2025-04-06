@@ -2,6 +2,7 @@
 import os
 import json
 import mlflow
+import yaml
 from dotenv import load_dotenv
 from load_prompts import load_prompts
 from render_criteria import render_criteria
@@ -25,41 +26,44 @@ vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENT
 def rank_outputs(criteria_prompt, outputs, task):
     with mlflow.start_run(nested=True):
         mlflow.log_param(f"{task}_ranking_criteria", criteria_prompt)
-        model = GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002"))
-        response = model.generate_content(criteria_prompt)
-        response_text = response.text.strip()
-        # print("response_text: ", response_text)
-        structured_data = (
-            json.loads(response_text)
-            if response_text.startswith("{")
-            else {
-                task: (
-                    response_text.split("ranked_indices:")[1]
-                    .strip()
-                    .split("\n")[0]
-                    # if f"ranked_indices:" in response_text
-                    # else f"No ranked_indices:"
-                )
-            }
-        )
-
-        ranked_indices_str = structured_data[task]
 
         try:
-            ranked_indices = json.loads(ranked_indices_str)
-        except json.JSONDecodeError:
-            print("Error: Could not parse ranked indices as JSON.")
-            ranked_indices = []  # Default empty list if parsing fails
+            model = GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002"))
+            response = model.generate_content(criteria_prompt)
+            response_text = response.text.strip() if response and response.text else ""
+        except Exception as e:
+            mlflow.log_param(f"{task}_rank_failed", True)
+            mlflow.log_param(f"{task}_rank_error", str(e))
+            print(f"[Error] Gemini ranking failed: {e}")
+            return outputs  # Fallback: return original unranked outputs
 
-        if ranked_indices:
+        # Parse structured ranking
+        try:
+            structured_data = (
+                json.loads(response_text)
+                if response_text.startswith("{")
+                else {
+                    task: (
+                        response_text.split("ranked_indices:")[1].strip().split("\n")[0]
+                    )
+                }
+            )
+            ranked_indices_str = structured_data[task]
+            ranked_indices = json.loads(ranked_indices_str)
+
             ranked_outputs = [outputs[i] for i in ranked_indices]
             mlflow.log_text("\n".join(ranked_outputs), f"{task}_ranked_outputs.txt")
             mlflow.log_param(f"{task}_top_ranked_index", ranked_indices[0])
 
-    return ranked_outputs
+        except Exception as e:
+            print(f"[Error] Failed to parse ranking response: {e}")
+            mlflow.log_param(f"{task}_rank_parse_failed", True)
+            ranked_outputs = outputs  # Fallback to original order
+
+        return ranked_outputs
 
 
-def rank_all_outputs(llm_outputs, tasks, body):
+def rank_all_outputs(llm_outputs, task, body):
     """Rank outputs for all tasks."""
     criterias = load_prompts(RANKER_CRITERIA_YAML)
 
@@ -68,29 +72,30 @@ def rank_all_outputs(llm_outputs, tasks, body):
     # Use with statement to automatically close the file
     try:
         # Loop through each task and generate the output
-        for task in tasks:
-            full_prompt = f"""
-                {render_criteria(criterias[task], 
-                                 output0=llm_outputs[task][0], 
-                                 output1=llm_outputs[task][1], 
-                                 output2=llm_outputs[task][2],
-                                 body=body)}
-            """
-            if full_prompt:
-                llm_ranks[task] = rank_outputs(
-                    criteria_prompt=full_prompt, outputs=llm_outputs[task], task=task
-                )
-            else:
-                llm_ranks[task] = f"No criteria found for task: {task}"
+        full_prompt = f"""
+            {render_criteria(criterias[task], 
+                                output0=llm_outputs[task][0], 
+                                output1=llm_outputs[task][1], 
+                                output2=llm_outputs[task][2],
+                                body=body)}
+        """
+        if full_prompt:
+            llm_ranks[task] = rank_outputs(
+                criteria_prompt=full_prompt, outputs=llm_outputs[task], task=task
+            )
+        else:
+            llm_ranks[task] = f"No criteria found for task: {task}"
 
         return llm_ranks
 
     except FileNotFoundError:
-        print(f"Error: The file {RANKER_CRITERIA_YAML} does not exist.")
-        return llm_outputs
+        raise FileNotFoundError(
+            f"Error: The file {RANKER_CRITERIA_YAML} does not exist."
+        )
+    except yaml.YAMLError as e:
+        raise ValueError(f"YAML loading error: {e}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        return llm_outputs
+        raise RuntimeError(f"Unexpected error in rank_all_outputs: {str(e)}") from e
 
 
 # if __name__ == "__main__":

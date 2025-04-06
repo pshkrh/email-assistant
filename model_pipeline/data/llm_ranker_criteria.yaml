@@ -41,7 +41,7 @@ draft_reply: |
     ranked_indices: [index_0, index_1, index_2]
     ```
 
-action_item: |
+action_items: |
   task: rank_action_items
     description: >
     Given three sets of AI-generated action items from an email thread, rank them from best to worst based on actionability, completeness, and specificity.

@@ -10,9 +10,15 @@ from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
 from google.auth import load_credentials_from_file
-from config import SERVICE_ACCOUNT_FILE, GENERATOR_PROMPTS_YAML, MODEL_ENV_PATH
+from config import (
+    SERVICE_ACCOUNT_FILE,
+    GENERATOR_PROMPTS_YAML,
+    ALTERNATE_GENERATOR_PROMPTS_YAML,
+    MODEL_ENV_PATH,
+)
 from load_prompts import load_prompts
 from render_prompt import render_prompt
+from render_alternate_prompt import render_alternate_prompt
 
 load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
@@ -37,55 +43,91 @@ def generate_outputs(task, prompt):
         mlflow.log_param(f"{task}_prompt", prompt)
 
         for i in range(3):
-            model = GenerativeModel(os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002"))
-            response = model.generate_content(prompt)
-            # Extract text response and attempt to parse it as JSON
-            response_text = response.text.strip()
-            # Ensure structured response formatting
-            structured_data = (
-                json.loads(response_text)
-                if response_text.startswith("{")
-                else {
-                    task: (
-                        response_text.split(f"{task}:")[1].split("```")[0]
-                        if f"{task}:" in response_text
-                        else f"No {task}"
-                    )
-                }
-            )
-            outputs.append(structured_data[task])
-            mlflow.log_text(structured_data[task], f"{task}_output_{i}.txt")
+            try:
+                model = GenerativeModel(
+                    os.getenv("GEMINI_MODEL", "gemini-1.5-flash-002")
+                )
+                response = model.generate_content(prompt)
+
+                response_text = (
+                    response.text.strip() if response and response.text else ""
+                )
+                if not response_text:
+                    raise ValueError("Empty response from LLM.")
+
+                # Attempt to parse JSON response
+                if response_text.startswith("{"):
+                    structured_data = json.loads(response_text)
+                else:
+                    # Fallback: try to extract from raw format
+                    if f"{task}:" in response_text:
+                        content = (
+                            response_text.split(f"{task}:")[1].split("```")[0].strip()
+                        )
+                    else:
+                        content = f"[Fallback] No {task} detected."
+
+                    structured_data = {task: content}
+
+                output = structured_data.get(task, f"[Missing key '{task}']")
+                outputs.append(output)
+                mlflow.log_text(output, f"{task}_output_{i}.txt")
+
+            except Exception as e:
+                fallback_msg = f"[Error] Failed to generate output: {str(e)}"
+                outputs.append(fallback_msg)
+                mlflow.log_text(fallback_msg, f"{task}_output_{i}_error.txt")
+                print(f"Generation failed for output {i}: {e}")
+
         mlflow.log_param(f"{task}_output_count", len(outputs))
     return outputs
 
 
-def process_email_body(body, tasks, user_email):
-    """Generate outputs for all tasks."""
+def get_prompt_for_task(task, strategy="default"):
+    if strategy == "default":
+        prompts = load_prompts(GENERATOR_PROMPTS_YAML)
+    else:
+        prompts = load_prompts(ALTERNATE_GENERATOR_PROMPTS_YAML)
 
-    prompts = load_prompts(GENERATOR_PROMPTS_YAML)
+    return prompts.get(task)
+
+
+def process_email_body(body, task, user_email, prompt_strategy, negative_examples):
+    """Generate outputs for all tasks."""
 
     llm_outputs = {}
 
     # Use with statement to automatically close the file
     try:
         # Loop through each task and generate the output
-        for task in tasks:
+        prompt_style = prompt_strategy.get(task, "default")
+        selected_prompt = get_prompt_for_task(task, strategy=prompt_style)
+
+        full_prompt = ""
+        if prompt_style == "default":
             full_prompt = f"""
-                {render_prompt(prompts[task], body, user_email)}
-            """
-            if full_prompt:
-                llm_outputs[task] = generate_outputs(task, full_prompt)
-            else:
-                llm_outputs[task] = f"No prompt found for task: {task}"
+            {render_prompt(selected_prompt, body, user_email)}
+        """
+        else:
+            full_prompt = f"""
+            {render_alternate_prompt(selected_prompt, body, user_email, negative_examples)}
+        """
+
+        if full_prompt and selected_prompt:
+            llm_outputs[task] = generate_outputs(task, full_prompt)
+        else:
+            raise ValueError(f"No prompt found or invalid for task: {task}")
 
         return llm_outputs
 
     except FileNotFoundError:
-        print(f"Error: The file {GENERATOR_PROMPTS_YAML} does not exist.")
-        return llm_outputs
+        raise FileNotFoundError(
+            f"Error: The file {GENERATOR_PROMPTS_YAML} does not exist."
+        )
+    except yaml.YAMLError as e:
+        raise ValueError(f"YAML loading error: {e}")
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        return llm_outputs
+        raise RuntimeError(f"Unexpected error in process_email_body: {str(e)}") from e
 
 
 # if __name__ == "__main__":

@@ -1,20 +1,5 @@
 from email.utils import parsedate_to_datetime
-import psycopg2
-from psycopg2.extras import RealDictCursor
-from config import DB_NAME, USER, PASSWORD, HOST, PORT
-
-# Database configuration (use environment variables in production)
-DB_CONFIG = {
-    "dbname": DB_NAME,
-    "user": USER,
-    "password": PASSWORD,
-    "host": HOST,
-    "port": PORT,
-}
-
-
-def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG, cursor_factory=RealDictCursor)
+from db_connection import get_db_connection
 
 
 def save_to_db(message_data, best_output):

@@ -9,11 +9,15 @@ from config import STRUCTURE_PROMPTS_YAML
 
 
 def load_structure_rules(yaml_file_path):
-    """
-    Loads structure rules from a YAML file and returns them as a dictionary.
-    """
-    with open(yaml_file_path, "r") as file:
-        return yaml.safe_load(file)
+    try:
+        with open(yaml_file_path, "r") as file:
+            return yaml.safe_load(file)
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Structure rule file not found: {yaml_file_path}")
+    except yaml.YAMLError as e:
+        raise ValueError(f"YAML parse error in structure rules: {str(e)}")
+    except Exception as e:
+        raise RuntimeError(f"Unexpected error loading structure rules: {str(e)}")
 
 
 def verify_structure(output, task, rules):
@@ -122,23 +126,38 @@ def get_best_output(ranked_outputs, task, body, userEmail, max_attempts=2):
                     mlflow.log_text(output, f"{task}_verified_output.txt")
                     return output
             attempt += 1
-            ranked_outputs = rank_all_outputs(
-                process_email_body(body, [task], userEmail), [task], body
-            )[task]
+            try:
+                new_llm_outputs = process_email_body(body, [task], userEmail)
+                ranked_outputs = rank_all_outputs(new_llm_outputs, [task], body)[task]
+            except Exception as e:
+                mlflow.log_param(f"{task}_regen_error", str(e))
+                mlflow.log_text(str(e), f"{task}_regen_fallback_error.txt")
+                break  # exit retry loop and fall back
             mlflow.log_metric(f"{task}_regen_attempts", attempt)
         mlflow.log_text(ranked_outputs[0], f"{task}_fallback_output.txt")
         return ranked_outputs[0]  # Fallback
 
 
-def verify_all_outputs(ranked_outputs_dict, tasks, body, userEmail):
-    """Verify and select best output for each task."""
+def verify_all_outputs(ranked_outputs_dict, task, body, userEmail):
+    """
+    Verifies all ranked outputs for a given task and returns the best one.
+    Raises exceptions on any structural or runtime failures.
+    """
+    try:
+        outputs = ranked_outputs_dict.get(task)
+        if not outputs or not isinstance(outputs, list):
+            error_msg = f"No ranked outputs found for task '{task}'"
+            mlflow.log_param(f"{task}_verify_failed", True)
+            mlflow.log_text(error_msg, f"{task}_verify_failure.txt")
+            raise ValueError(error_msg)
 
-    best_output = {}
-    for task in tasks:
-        best_output[task] = get_best_output(
-            ranked_outputs_dict[task], task, body, userEmail
-        )
-    return best_output
+        return get_best_output(outputs, task, body, userEmail)
+
+    except Exception as e:
+        mlflow.log_param(f"{task}_verify_failed", True)
+        mlflow.log_param(f"{task}_verify_error", str(e))
+        mlflow.log_text(str(e), f"{task}_verify_failure.txt")
+        raise RuntimeError(f"Verification failed for task '{task}': {str(e)}") from e
 
 
 # if __name__ == "__main__":

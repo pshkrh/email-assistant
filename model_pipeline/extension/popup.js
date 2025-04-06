@@ -14,57 +14,147 @@ class Logger {
 
 const logger = new Logger();
 
-document.getElementById("testAuth").addEventListener("click", () => {
-  console.clear(); // Clear previous logs
-  console.log("Testing OAuth only...");
-
-  chrome.identity.getAuthToken({ interactive: true, scopes: ["https://www.googleapis.com/auth/gmail.readonly"] }, (token) => {
-    if (chrome.runtime.lastError) {
-      console.error("AUTH ERROR:", chrome.runtime.lastError.message);
-    } else {
-      console.log("TOKEN SUCCESS:", token.substring(0, 5) + "...");
-    }
-  });
-});
-
-document.getElementById("fetchButton").addEventListener("click", () => {
-  // Fixed: addListener -> addEventListener
+document.getElementById("analyzeButton").addEventListener("click", () => {
   const status = document.getElementById("status");
   const result = document.getElementById("result");
-  const fetchButton = document.getElementById("fetchButton");
+  const feedback = document.getElementById("feedback");
+  const analyzeButton = document.getElementById("analyzeButton");
 
-  fetchButton.disabled = true;
-  status.textContent = "Fetching thread...";
+  const tasks = [];
+  if (document.getElementById("summary").checked) tasks.push("summary");
+  if (document.getElementById("actionItems").checked)
+    tasks.push("action_items");
+  if (document.getElementById("draftReply").checked) tasks.push("draft_reply");
+
+  if (tasks.length === 0) {
+    status.style.display = "block";
+    status.textContent = "Please select at least one task.";
+    logger.log("No tasks selected");
+    return;
+  }
+
+  analyzeButton.disabled = true;
+  status.style.display = "block";
+  status.textContent = "Analyzing email...";
+  result.style.display = "none";
   result.textContent = "";
-  logger.log("Button clicked: Starting thread fetch");
+  feedback.style.display = "none";
+  feedback.innerHTML = "";
+  logger.log(`Starting analysis with tasks: ${tasks.join(", ")}`);
 
-  chrome.runtime.sendMessage({ action: "fetchThread" }, (response) => {
+  chrome.runtime.sendMessage({ action: "fetchThread", tasks }, (response) => {
     if (chrome.runtime.lastError) {
-      status.textContent = "Error: Could not fetch thread";
+      status.textContent = "Error: Could not analyze email.";
       logger.log(`Error: ${chrome.runtime.lastError.message}`);
-      fetchButton.disabled = false;
+      analyzeButton.disabled = false;
+      return;
+    }
+    if (response.error) {
+      status.textContent = response.error;
+      logger.log(`Error: ${response.error}`);
+      analyzeButton.disabled = false;
       return;
     }
 
     chrome.storage.local.get("threadData", (data) => {
       if (data.threadData) {
-        status.textContent = "Thread fetched successfully!";
+        status.textContent = "Analysis complete!";
+        result.style.display = "block";
         result.textContent = formatThreadData(data.threadData);
-        logger.log("Thread data displayed");
+        displayFeedbackOptions(data.threadData, tasks);
+        logger.log("Analysis results displayed");
       } else {
-        status.textContent = "Error: No thread data available";
-        logger.log("No thread data found");
+        status.textContent = "Error: No analysis data available.";
+        logger.log("No analysis data found");
       }
-      fetchButton.disabled = false;
+      analyzeButton.disabled = false;
     });
   });
 });
 
 function formatThreadData(data) {
-  let output = `Thread ID: ${data.threadId}\n\n`;
-  output += `Messages: ${data.messages || "N/A"}\n`;
-  output += `Summary: ${data.summary || "N/A"}\n`;
-  output += `Action Items: ${data.action_items || "N/A"}\n`;
-  output += `Draft Reply: ${data.draft_reply || "N/A"}\n`;
-  return output;
+  let output = `Thread ID: ${data.threadId || "N/A"}\n`;
+  output += `User Email: ${data.userEmail || "N/A"}\n`;
+  if (data.summary) output += `\nSummary:\n${data.summary}\n`;
+  if (data.action_items) output += `\nAction Items:\n${data.action_items}\n`;
+  if (data.draft_reply) output += `\nDraft Reply:\n${data.draft_reply}\n`;
+  return output.trim();
+}
+
+function displayFeedbackOptions(data, tasks) {
+  const feedbackContainer = document.getElementById("feedback");
+  feedbackContainer.style.display = "block";
+  feedbackContainer.innerHTML = ""; // Clear previous feedback
+
+  tasks.forEach((task) => {
+    const taskName = task
+      .replace("_", " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase()); // e.g., "action_items" -> "Action Items"
+    const feedbackDiv = document.createElement("div");
+    feedbackDiv.className = "feedback-item";
+    feedbackDiv.innerHTML = `
+      <p>Rate "${taskName}":</p>
+      <button class="feedback-btn thumbs-up" data-task="${task}">
+        <i class="fas fa-thumbs-up"></i>
+      </button>
+      <button class="feedback-btn thumbs-down" data-task="${task}">
+        <i class="fas fa-thumbs-down"></i>
+      </button>
+    `;
+    feedbackContainer.appendChild(feedbackDiv);
+  });
+
+  // Add event listeners for feedback buttons
+  document.querySelectorAll(".feedback-item").forEach((item) => {
+    const thumbsUp = item.querySelector(".thumbs-up");
+    const thumbsDown = item.querySelector(".thumbs-down");
+    const task = thumbsUp.getAttribute("data-task");
+
+    thumbsUp.addEventListener("click", () => {
+      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
+      sendFeedback(data, task, "thumbs_up");
+      thumbsUp.disabled = true;
+      thumbsDown.disabled = true;
+      thumbsUp.classList.add("selected");
+    });
+
+    thumbsDown.addEventListener("click", () => {
+      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
+      sendFeedback(data, task, "thumbs_down");
+      thumbsUp.disabled = true;
+      thumbsDown.disabled = true;
+      thumbsDown.classList.add("selected");
+    });
+  });
+}
+
+function sendFeedback(data, task, rating) {
+  const feedbackData = {
+    userEmail: data.userEmail || "unknown",
+    threadId: data.threadId || "unknown",
+    task: task,
+    rating: rating,
+    docId: data.docId,
+    timestamp: new Date().toISOString(),
+  };
+
+  logger.log(`Sending feedback payload: ${JSON.stringify(feedbackData)}`);
+
+  fetch("http://127.0.0.1:8000/store_feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(feedbackData),
+  })
+    .then((res) => {
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return res.json();
+    })
+    .then((response) => {
+      logger.log(`Feedback stored successfully: ${JSON.stringify(response)}`);
+    })
+    .catch((err) => {
+      logger.log(`Error storing feedback: ${err.message}`);
+    });
 }

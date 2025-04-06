@@ -21,6 +21,9 @@ PREDICTED_SAMPLE_CSV_PATH = os.path.join(DATA_DIR, "predicted_enron_sample.csv")
 STRUCTURE_PROMPTS_YAML = os.path.join(DATA_DIR, "llm_output_structure.yaml")
 RANKER_CRITERIA_YAML = os.path.join(DATA_DIR, "llm_ranker_criteria.yaml")
 GENERATOR_PROMPTS_YAML = os.path.join(DATA_DIR, "llm_generator_prompts.yaml")
+ALTERNATE_GENERATOR_PROMPTS_YAML = os.path.join(
+    DATA_DIR, "llm_generator_prompts_alternate.yaml"
+)
 
 # Credentials directory path where all the credentials are stored
 CREDENTIALS_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "credentials")

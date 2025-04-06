@@ -4,6 +4,9 @@ summary: |
   and critical points. Avoid unnecessary details or greetings/signatures. 
   Include all the named entites properly wherever required to.
 
+  Here are a few of your previous responses that the user did not like. Please consider them while responding:
+    {{ negative_examples }}
+
   Email Thread:
   """
   {{ email_thread }}
@@ -23,6 +26,9 @@ draft_reply: |
   Given the following email thread, generate a polite, professional, and 
   contextually appropriate reply from the perspective of "{{ user_email }}":
   Include all the named entites properly wherever required to.
+
+  Here are a few of your previous responses that the user did not like. Please consider them while responding:
+    {{ negative_examples }}
 
   Email thread:
   """
@@ -48,6 +54,9 @@ action_items: |
   ```
   action_items: None
   ```
+
+  Here are a few of your previous responses that the user did not like. Please consider them while responding:
+    {{ negative_examples }}
 
   Email Thread:
   """
