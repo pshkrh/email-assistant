@@ -128,18 +128,83 @@ button:disabled {
   color: #b0b0b0;
 }
 
-.result {
+/* Results container and cards */
+.results-container {
   margin: 15px 0;
-  padding: 15px;
+  display: none;
+}
+
+.result-card {
   background-color: #2a2a2a;
-  border: 1px solid #3a3a3a;
   border-radius: 14px;
+  margin-bottom: 15px;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+}
+
+.result-header {
+  background-color: #363636;
+  padding: 10px 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #444;
+}
+
+.result-title {
+  color: #d4a017;
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.result-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.action-btn {
+  background: none;
+  border: none;
+  color: #b0b0b0;
   font-size: 14px;
+  cursor: pointer;
+  padding: 2px 5px;
+  margin: 0;
+  box-shadow: none;
+  width: auto;
+}
+
+.action-btn:hover {
+  color: #d4a017;
+  background: none;
+  box-shadow: none;
+}
+
+.result-content {
+  padding: 15px;
   color: #e5e5e5;
-  max-height: 200px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-height: 150px;
   overflow-y: auto;
   white-space: pre-wrap;
-  line-height: 1.6;
+}
+
+.result-content p {
+  margin: 0 0 10px 0;
+}
+
+.result-content ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.result-content li {
+  margin-bottom: 5px;
+}
+
+.result {
   display: none;
 }
 
@@ -196,10 +261,15 @@ button:disabled {
   cursor: pointer;
   padding: 5px 10px;
   transition: color 0.2s;
+  width: auto;
+  box-shadow: none;
+  margin-bottom: 0;
 }
 
 .feedback-btn:hover {
   color: #d4a017;
+  background: none;
+  box-shadow: none;
 }
 
 .feedback-btn.selected {
@@ -256,4 +326,51 @@ details[open] summary .arrow {
   max-height: 150px;
   overflow-y: auto;
   white-space: pre-wrap;
+}
+
+/* Toast notification for copied text */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.toast.show {
+  opacity: 1;
+}
+
+/* Loading animation */
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border: 2px solid rgba(212, 160, 23, 0.3);
+  border-radius: 50%;
+  border-top-color: #d4a017;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.task-result-block {
+  margin-bottom: 25px;
+}
+
+.task-result-block .feedback-item {
+  margin-top: 10px;
+  margin-bottom: 0;
 }

@@ -69,7 +69,10 @@ function showError(errorMessage, errorType) {
       .getAttribute("data-error-type");
 
     // For authentication errors, clear tokens before retrying
-    if (errorType === "Authentication Error") {
+    if (
+      errorType === "Authentication Error" ||
+      errorType === "Account Mismatch Error"
+    ) {
       logger.log("Authentication error detected, clearing tokens before retry");
       // Send message to background script to clear all tokens
       chrome.runtime.sendMessage({ action: "clearAuthTokens" }, () => {
@@ -129,7 +132,6 @@ function attachEventListeners() {
 function performAnalysis() {
   const status = document.getElementById("status");
   const result = document.getElementById("result");
-  const feedback = document.getElementById("feedback");
   const analyzeButton = document.getElementById("analyzeButton");
 
   const tasks = [];
@@ -146,11 +148,19 @@ function performAnalysis() {
 
   analyzeButton.disabled = true;
   status.style.display = "block";
-  status.textContent = "Analyzing email...";
+  status.innerHTML = '<span class="loading-spinner"></span> Analyzing email...';
   result.style.display = "none";
   result.textContent = "";
-  feedback.style.display = "none";
-  feedback.innerHTML = "";
+
+  // Remove results container if it exists from a previous analysis
+  const resultsContainer = document.getElementById("resultsContainer");
+  if (resultsContainer) {
+    resultsContainer.remove();
+  }
+
+  // Remove all task-result-blocks from previous analysis
+  document.querySelectorAll(".task-result-block").forEach((el) => el.remove());
+
   logger.log(`Starting analysis with tasks: ${tasks.join(", ")}`);
 
   try {
@@ -185,9 +195,7 @@ function performAnalysis() {
       chrome.storage.local.get("threadData", (data) => {
         if (data.threadData) {
           status.textContent = "Analysis complete!";
-          result.style.display = "block";
-          result.textContent = formatThreadData(data.threadData);
-          displayFeedbackOptions(data.threadData, tasks);
+          displayResults(data.threadData, tasks);
           logger.log("Analysis results displayed");
         } else {
           showError("No analysis data available.", "Data Error");
@@ -203,60 +211,201 @@ function performAnalysis() {
   }
 }
 
-function formatThreadData(data) {
-  let output = `Thread ID: ${data.threadId || "N/A"}\n`;
-  output += `User Email: ${data.userEmail || "N/A"}\n`;
-  if (data.summary) output += `\nSummary:\n${data.summary}\n`;
-  if (data.action_items) output += `\nAction Items:\n${data.action_items}\n`;
-  if (data.draft_reply) output += `\nDraft Reply:\n${data.draft_reply}\n`;
-  return output.trim();
+// Display results in a modern card-based UI with interleaved feedback
+function displayResults(data, tasks) {
+  // Create a results container
+  const resultsContainer = document.createElement("div");
+  resultsContainer.id = "resultsContainer";
+  resultsContainer.className = "results-container";
+  resultsContainer.style.display = "block";
+
+  // Create a card for each result type
+  const taskLabels = {
+    summary: "Summary",
+    action_items: "Action Items",
+    draft_reply: "Draft Reply",
+  };
+
+  // Append the results container to the main container
+  const container = document.querySelector(".container");
+  container.appendChild(resultsContainer);
+
+  // Add each task result that was requested with its feedback
+  tasks.forEach((task) => {
+    if (data.result && data.result[task]) {
+      // Create a block to hold both result and feedback
+      const taskBlock = document.createElement("div");
+      taskBlock.className = "task-result-block";
+
+      // Create result card
+      const resultCard = createResultCard(
+        taskLabels[task] || task,
+        data.result[task]
+      );
+      taskBlock.appendChild(resultCard);
+
+      // Create feedback for this specific task
+      const feedbackDiv = createFeedbackForTask(data, task);
+      taskBlock.appendChild(feedbackDiv);
+
+      // Add the block to the container
+      container.appendChild(taskBlock);
+    }
+  });
 }
 
-function displayFeedbackOptions(data, tasks) {
-  const feedbackContainer = document.getElementById("feedback");
-  feedbackContainer.style.display = "block";
-  feedbackContainer.innerHTML = ""; // Clear previous feedback
+// Create a card for each result type
+function createResultCard(title, content) {
+  const card = document.createElement("div");
+  card.className = "result-card";
 
-  tasks.forEach((task) => {
-    const taskName = task
-      .replace("_", " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase()); // e.g., "action_items" -> "Action Items"
-    const feedbackDiv = document.createElement("div");
-    feedbackDiv.className = "feedback-item";
-    feedbackDiv.innerHTML = `
-      <p>Rate "${taskName}":</p>
+  // Format content based on result type
+  let formattedContent = content;
+
+  // For action items, format as list if needed
+  if (
+    title === "Action Items" &&
+    !content.includes("<li>") &&
+    !content.includes("* ")
+  ) {
+    // Check if content appears to be a list with line breaks
+    if (content.includes("\n")) {
+      const items = content
+        .split("\n")
+        .filter((item) => item.trim().length > 0);
+      if (items.length > 1) {
+        formattedContent = `<ul>${items
+          .map((item) => `<li>${item.trim()}</li>`)
+          .join("")}</ul>`;
+      }
+    }
+  }
+
+  card.innerHTML = `
+    <div class="result-header">
+      <h3 class="result-title">${title}</h3>
+      <div class="result-actions">
+        <button class="action-btn copy-btn" title="Copy to clipboard">
+          <i class="fas fa-copy"></i>
+        </button>
+      </div>
+    </div>
+    <div class="result-content">${formatContent(formattedContent)}</div>
+  `;
+
+  // Add event listener for copy button
+  setTimeout(() => {
+    const copyBtn = card.querySelector(".copy-btn");
+    copyBtn.addEventListener("click", () => {
+      copyToClipboard(content);
+      showToast("Copied to clipboard!");
+    });
+  }, 0);
+
+  return card;
+}
+
+// Create feedback element for a specific task
+function createFeedbackForTask(data, task) {
+  const taskName = task
+    .replace("_", " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const feedbackDiv = document.createElement("div");
+  feedbackDiv.className = "feedback-item";
+  feedbackDiv.innerHTML = `
+    <p>Rate "${taskName}":</p>
+    <div>
       <button class="feedback-btn thumbs-up" data-task="${task}">
         <i class="fas fa-thumbs-up"></i>
       </button>
       <button class="feedback-btn thumbs-down" data-task="${task}">
         <i class="fas fa-thumbs-down"></i>
       </button>
-    `;
-    feedbackContainer.appendChild(feedbackDiv);
-  });
+    </div>
+  `;
 
   // Add event listeners for feedback buttons
-  document.querySelectorAll(".feedback-item").forEach((item) => {
-    const thumbsUp = item.querySelector(".thumbs-up");
-    const thumbsDown = item.querySelector(".thumbs-down");
-    const task = thumbsUp.getAttribute("data-task");
+  const thumbsUp = feedbackDiv.querySelector(".thumbs-up");
+  const thumbsDown = feedbackDiv.querySelector(".thumbs-down");
 
-    thumbsUp.addEventListener("click", () => {
-      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
-      sendFeedback(data, task, "thumbs_up");
-      thumbsUp.disabled = true;
-      thumbsDown.disabled = true;
-      thumbsUp.classList.add("selected");
-    });
-
-    thumbsDown.addEventListener("click", () => {
-      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
-      sendFeedback(data, task, "thumbs_down");
-      thumbsUp.disabled = true;
-      thumbsDown.disabled = true;
-      thumbsDown.classList.add("selected");
-    });
+  thumbsUp.addEventListener("click", () => {
+    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
+    sendFeedback(data, task, "thumbs_up");
+    thumbsUp.disabled = true;
+    thumbsDown.disabled = true;
+    thumbsUp.classList.add("selected");
   });
+
+  thumbsDown.addEventListener("click", () => {
+    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
+    sendFeedback(data, task, "thumbs_down");
+    thumbsUp.disabled = true;
+    thumbsDown.disabled = true;
+    thumbsDown.classList.add("selected");
+  });
+
+  return feedbackDiv;
+}
+
+// Format content for better display
+function formatContent(content) {
+  if (!content) return "No content available";
+
+  // If content already has HTML formatting, return as is
+  if (content.includes("<")) return content;
+
+  // Replace line breaks with paragraph tags
+  return content
+    .split("\n\n")
+    .map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+// Helper function to copy text to clipboard
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(
+    () => {
+      logger.log("Content copied to clipboard");
+    },
+    (err) => {
+      logger.log(`Could not copy text: ${err}`);
+    }
+  );
+}
+
+// Show a toast notification
+function showToast(message, duration = 2000) {
+  // Remove existing toast if present
+  const existingToast = document.querySelector(".toast");
+  if (existingToast) {
+    existingToast.remove();
+  }
+
+  // Create and show the toast
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  // Trigger animation
+  setTimeout(() => {
+    toast.classList.add("show");
+  }, 10);
+
+  // Hide after duration
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => {
+      toast.remove();
+    }, 300);
+  }, duration);
+}
+
+// Helper to truncate text with ellipsis
+function truncateText(text, maxLength) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + "...";
 }
 
 function sendFeedback(data, task, rating) {
@@ -284,10 +433,11 @@ function sendFeedback(data, task, rating) {
     })
     .then((response) => {
       logger.log(`Feedback stored successfully: ${JSON.stringify(response)}`);
+      showToast("Feedback submitted!");
     })
     .catch((err) => {
       logger.log(`Error storing feedback: ${err.message}`);
-      showError(`Failed to submit feedback: ${err.message}`, "API Error");
+      showToast("Failed to submit feedback", 3000);
     });
 }
 

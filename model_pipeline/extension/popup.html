@@ -5,7 +5,7 @@
     <title>MailMate</title>
     <link rel="stylesheet" href="styles.css" />
     <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Roboto:wght@400;500&display=swap"
       rel="stylesheet"
     />
     <link
@@ -35,8 +35,13 @@
       </div>
       <button id="analyzeButton">Analyze Email</button>
       <div id="status" class="status" style="display: none"></div>
-      <div id="result" class="result"></div>
-      <div id="feedback" class="feedback"></div>
+
+      <!-- Legacy result container (kept for compatibility) -->
+      <div id="result" class="result" style="display: none"></div>
+
+      <!-- Feedback container with initial display:none -->
+      <div id="feedback" class="feedback" style="display: none"></div>
+
       <details>
         <summary>View Logs <span class="arrow">›</span></summary>
         <pre id="logs" class="logs"></pre>
