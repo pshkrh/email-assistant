@@ -9,16 +9,22 @@ from tqdm import tqdm
 from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
-from google.auth import load_credentials_from_file
 from config import (
     SERVICE_ACCOUNT_FILE,
     GENERATOR_PROMPTS_YAML,
     ALTERNATE_GENERATOR_PROMPTS_YAML,
     MODEL_ENV_PATH,
+    IN_CLOUD_RUN,
+    GCP_PROJECT_ID,
+    SERVICE_ACCOUNT_SECRET_ID
 )
 from load_prompts import load_prompts
 from render_prompt import render_prompt
 from render_alternate_prompt import render_alternate_prompt
+
+# Import the new secret manager utilities
+if IN_CLOUD_RUN:
+    from secret_manager import get_credentials_from_secret
 
 load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
@@ -26,7 +32,21 @@ load_dotenv(dotenv_path=MODEL_ENV_PATH)
 GCP_LOCATION = os.getenv("GCP_LOCATION")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL")
 
-CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
+# Initialize credentials based on environment
+if IN_CLOUD_RUN:
+    # Get credentials from Secret Manager
+    creds_dict = get_credentials_from_secret(GCP_PROJECT_ID, SERVICE_ACCOUNT_SECRET_ID, save_to_file=SERVICE_ACCOUNT_FILE)
+    
+    # For libraries that expect a file
+    from google.oauth2 import service_account
+    CREDENTIALS = service_account.Credentials.from_service_account_info(creds_dict)
+    
+    # Extract project ID from credentials
+    GCP_PROJECT_ID = creds_dict.get("project_id", GCP_PROJECT_ID)
+else:
+    # Load from file for local development
+    from google.auth import load_credentials_from_file
+    CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
 
 # Initialize Vertex AI
 vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENTIALS)

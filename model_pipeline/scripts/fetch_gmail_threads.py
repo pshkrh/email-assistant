@@ -7,15 +7,18 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from flask_cors import CORS
 
-
 from llm_generator import process_email_body
-
 from llm_ranker import rank_all_outputs
 from output_verifier import verify_all_outputs
 from save_to_database import save_to_db
 from update_database import update_user_feedback
 from db_helpers import get_existing_user_feedback
 from db_helpers import get_last_3_feedbacks
+from config import IN_CLOUD_RUN, GCP_PROJECT_ID, GMAIL_API_SECRET_ID, GMAIL_API_CREDENTIALS
+
+# Import the secret manager if running in Cloud Run
+if IN_CLOUD_RUN:
+    from secret_manager import get_credentials_from_secret
 
 app = Flask(__name__)
 
@@ -32,6 +35,15 @@ CORS(
         }
     },
 )
+
+# Load Gmail API credentials
+if IN_CLOUD_RUN:
+    # In Cloud Run, get from Secret Manager
+    try:
+        get_credentials_from_secret(GCP_PROJECT_ID, GMAIL_API_SECRET_ID, save_to_file=GMAIL_API_CREDENTIALS)
+        app.logger.info(f"Gmail API credentials loaded from Secret Manager")
+    except Exception as e:
+        app.logger.error(f"Failed to load Gmail credentials from Secret Manager: {e}")
 
 
 @app.route("/fetch_gmail_thread", methods=["POST"])

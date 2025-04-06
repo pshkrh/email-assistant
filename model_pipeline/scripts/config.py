@@ -5,6 +5,10 @@ from get_project_root import project_root
 # Project root directory path
 PROJECT_ROOT = project_root()
 
+# Check if running in Cloud Run
+IN_CLOUD_RUN = os.environ.get("K_SERVICE") is not None
+GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "email-assistant-449706")
+
 # Data directory path where all the data and yaml files are stored
 DATA_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "data")
 
@@ -27,14 +31,18 @@ ALTERNATE_GENERATOR_PROMPTS_YAML = os.path.join(
 
 # Credentials directory path where all the credentials are stored
 CREDENTIALS_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "credentials")
+os.makedirs(CREDENTIALS_DIR, exist_ok=True)  # Ensure the directory exists
 
-# TODO: i have changed the path of the DATA_DIR, so have to change the path of the credentials as well
+# Secret Manager IDs (for Cloud Run)
+GMAIL_API_SECRET_ID = "gmail-credentials"
+SERVICE_ACCOUNT_SECRET_ID = "service-account-credentials"
+
+# Credential paths
 GMAIL_API_CREDENTIALS = os.path.join(CREDENTIALS_DIR, "MailMateCredential.json")
 TOKEN_DIR = os.path.join(CREDENTIALS_DIR, "user_tokens")
 SERVICE_ACCOUNT_FILE = os.path.join(CREDENTIALS_DIR, "GoogleCloudCredential.json")
 
 # Model .env path
-
 MODEL_ENV_PATH = os.path.join(PROJECT_ROOT, "model_pipeline", ".env")
 
 # Gmail API Configuration
@@ -46,8 +54,8 @@ MLFLOW_LOG_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "logs")
 MLFLOW_EXPERIMENT_NAME = "MailMate_Email_Assistant"
 
 # DB configurations
-DB_NAME = "mail_mate_user_data"
-USER = "postgres"
-PASSWORD = "postgres"
-HOST = "35.226.149.135"
-PORT = "5432"
+DB_NAME = os.environ.get("DB_NAME", "mail_mate_user_data")
+USER = os.environ.get("DB_USER", "postgres")
+PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
+HOST = os.environ.get("DB_HOST", "35.226.149.135")
+PORT = os.environ.get("DB_PORT", "5432")
