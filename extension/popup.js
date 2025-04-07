@@ -71,20 +71,20 @@ function showError(errorMessage, errorType) {
       .getElementById("retryButton")
       .getAttribute("data-error-type");
 
-      // For authentication errors, clear tokens before retrying
-      if (
-        errorType === "Authentication Error" ||
-        errorType === "Account Mismatch Error"
-      ) {
-        logger.log("Authentication error detected, clearing tokens before retry");
-        // Send message to background script to clear all tokens
-        chrome.runtime.sendMessage({ action: "clearAuthTokens" }, () => {
-          resetUI();
-        });
-      } else {
+    // For authentication errors, clear tokens before retrying
+    if (
+      errorType === "Authentication Error" ||
+      errorType === "Account Mismatch Error"
+    ) {
+      logger.log("Authentication error detected, clearing tokens before retry");
+      // Send message to background script to clear all tokens
+      chrome.runtime.sendMessage({ action: "clearAuthTokens" }, () => {
         resetUI();
-      }
-    });
+      });
+    } else {
+      resetUI();
+    }
+  });
 }
 
 // Reset UI to original state
@@ -130,6 +130,19 @@ function attachEventListeners() {
   document
     .getElementById("analyzeButton")
     .addEventListener("click", performAnalysis);
+
+  // Make task cards clickable - toggle checkbox when clicking anywhere on the card
+  document.querySelectorAll('.task-card').forEach(card => {
+    if (!card.classList.contains('disabled')) {
+      card.addEventListener('click', (event) => {
+        // Prevent double toggling when clicking directly on checkbox or label
+        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'LABEL') {
+          const checkbox = card.querySelector('input[type="checkbox"]');
+          checkbox.checked = !checkbox.checked;
+        }
+      });
+    }
+  });
 }
 
 function performAnalysis() {
@@ -299,10 +312,10 @@ function createResultCard(title, content) {
   // Add event listener for copy button
   setTimeout(() => {
     const copyBtn = card.querySelector(".copy-btn");
-      copyBtn.addEventListener("click", () => {
-        copyToClipboard(content);
-        showToast("Copied to clipboard!");
-      });
+    copyBtn.addEventListener("click", () => {
+      copyToClipboard(content);
+      showToast("Copied to clipboard!");
+    });
   }, 0);
 
   return card;
@@ -332,21 +345,21 @@ function createFeedbackForTask(data, task) {
   const thumbsUp = feedbackDiv.querySelector(".thumbs-up");
   const thumbsDown = feedbackDiv.querySelector(".thumbs-down");
 
-    thumbsUp.addEventListener("click", () => {
-      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
-      sendFeedback(data, task, "thumbs_up");
-      thumbsUp.disabled = true;
-      thumbsDown.disabled = true;
-      thumbsUp.classList.add("selected");
-    });
+  thumbsUp.addEventListener("click", () => {
+    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
+    sendFeedback(data, task, "thumbs_up");
+    thumbsUp.disabled = true;
+    thumbsDown.disabled = true;
+    thumbsUp.classList.add("selected");
+  });
 
-    thumbsDown.addEventListener("click", () => {
-      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
-      sendFeedback(data, task, "thumbs_down");
-      thumbsUp.disabled = true;
-      thumbsDown.disabled = true;
-      thumbsDown.classList.add("selected");
-    });
+  thumbsDown.addEventListener("click", () => {
+    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
+    sendFeedback(data, task, "thumbs_down");
+    thumbsUp.disabled = true;
+    thumbsDown.disabled = true;
+    thumbsDown.classList.add("selected");
+  });
 
   return feedbackDiv;
 }
@@ -446,12 +459,12 @@ function sendFeedback(data, task, rating) {
 
 // Initialize the UI
 document.addEventListener("DOMContentLoaded", function () {
-    attachEventListeners();
+  attachEventListeners();
 
-    // Clear any existing status messages on fresh load
-    const status = document.getElementById("status");
-    if (status) {
-      status.style.display = "none";
-      status.textContent = "";
+  // Clear any existing status messages on fresh load
+  const status = document.getElementById("status");
+  if (status) {
+    status.style.display = "none";
+    status.textContent = "";
   }
 });
