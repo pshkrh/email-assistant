@@ -35,7 +35,8 @@
     "http://localhost:8000/*",
     "http://localhost:8001/*",
     "https://accounts.google.com/*",
-    "https://gmail.googleapis.com/*"
+    "https://gmail.googleapis.com/*",
+    "https://email-assistant-673808915782.us-central1.run.app/*"
   ],
   "oauth2": {
     "client_id": "673808915782-hgbcr3o8tjjct8pvgej9uq4599pc4k0g.apps.googleusercontent.com",

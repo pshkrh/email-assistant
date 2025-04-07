@@ -13,7 +13,7 @@ from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
 
 def send_fetch_gmail_thread_request(email, thread_id):
     """Send a POST request to the fetch_gmail_thread endpoint."""
-    url = "http://127.0.0.1:8000/fetch_gmail_thread"
+    url = "https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread"
     payload = {
         "userEmail": email,
         "messageId": "unknown",  # Placeholder; adjust if you have a real message ID

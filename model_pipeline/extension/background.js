@@ -412,11 +412,14 @@ function fetchThreadData(token, threadId, email, tasks, sendResponse) {
 
       console.log("Data with tasks:", data);
 
-      fetch("http://127.0.0.1:8000/fetch_gmail_thread", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
+      fetch(
+        "https://email-assistant-673808915782.us-central1.run.app/fetch_gmail_thread",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }
+      )
         .then((res) => {
           if (!res.ok) {
             throw new Error(`Server error: ${res.status}`);
