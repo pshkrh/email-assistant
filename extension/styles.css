@@ -67,9 +67,33 @@ header {
 
 .task-card input[type="checkbox"] {
   margin-right: 14px;
-  accent-color: #d4a017;
+  appearance: none;
+  -webkit-appearance: none;
   width: 18px;
   height: 18px;
+  border: 2px solid #4a4a4a;
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.task-card input[type="checkbox"]:checked {
+  background-color: #d4a017;
+  border-color: #d4a017;
+}
+
+.task-card input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 .task-card label {
