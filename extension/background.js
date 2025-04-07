@@ -1,6 +1,6 @@
 const CLIENT_ID =
   "673808915782-hgbcr3o8tjjct8pvgej9uq4599pc4k0g.apps.googleusercontent.com";
-const REDIRECT_URI = "https://fdclgicibpkmpihelkmiggcljjnbgfni.chromiumapp.org";
+const REDIRECT_URI = "https://agmojfdfhghpgmklbbdijhihdheihnda.chromiumapp.org";
 const SCOPES =
   "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email";
 

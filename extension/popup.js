@@ -20,10 +20,13 @@ const logger = new Logger();
 // Error handling function
 function showError(errorMessage, errorType) {
   const container = document.querySelector(".container");
+  if (!container) return; // Safety check
+
   const errorHtml = `
     <header>
-      <h1>MailMate</h1>
-      <p>Smart Email Insights</p>
+      <div class="logo-container">
+        <img src="logo.png" alt="MailMate" class="logo" />
+      </div>
     </header>
     <div class="error-banner">
       <p class="error-title">${errorType || "Error"}</p>
@@ -87,7 +90,7 @@ function showError(errorMessage, errorType) {
 // Reset UI to original state
 function resetUI() {
   const container = document.querySelector(".container");
-  if (container.dataset.originalContent) {
+  if (container && container.dataset.originalContent) {
     logger.log("UI reset to original state");
 
     // Restore the original content
@@ -127,6 +130,19 @@ function attachEventListeners() {
   document
     .getElementById("analyzeButton")
     .addEventListener("click", performAnalysis);
+
+  // Make task cards clickable - toggle checkbox when clicking anywhere on the card
+  document.querySelectorAll('.task-card').forEach(card => {
+    if (!card.classList.contains('disabled')) {
+      card.addEventListener('click', (event) => {
+        // Prevent double toggling when clicking directly on checkbox or label
+        if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'LABEL') {
+          const checkbox = card.querySelector('input[type="checkbox"]');
+          checkbox.checked = !checkbox.checked;
+        }
+      });
+    }
+  });
 }
 
 function performAnalysis() {
