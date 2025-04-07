@@ -21,19 +21,15 @@ header {
   margin-bottom: 24px;
 }
 
-h1 {
-  font-family: "Playfair Display", serif;
-  font-size: 30px;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+.logo-container {
+  text-align: center;
+  margin-bottom: 10px;
 }
 
-header p {
-  font-size: 15px;
-  color: #b0b0b0;
-  margin-top: 6px;
+.logo {
+  width: 160px;
+  height: auto;
+  margin: 0 auto;
 }
 
 .task-container {

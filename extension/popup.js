@@ -20,10 +20,13 @@ const logger = new Logger();
 // Error handling function
 function showError(errorMessage, errorType) {
   const container = document.querySelector(".container");
+  if (!container) return; // Safety check
+
   const errorHtml = `
     <header>
-      <h1>MailMate</h1>
-      <p>Smart Email Insights</p>
+      <div class="logo-container">
+        <img src="logo.png" alt="MailMate" class="logo" />
+      </div>
     </header>
     <div class="error-banner">
       <p class="error-title">${errorType || "Error"}</p>
@@ -68,26 +71,26 @@ function showError(errorMessage, errorType) {
       .getElementById("retryButton")
       .getAttribute("data-error-type");
 
-    // For authentication errors, clear tokens before retrying
-    if (
-      errorType === "Authentication Error" ||
-      errorType === "Account Mismatch Error"
-    ) {
-      logger.log("Authentication error detected, clearing tokens before retry");
-      // Send message to background script to clear all tokens
-      chrome.runtime.sendMessage({ action: "clearAuthTokens" }, () => {
+      // For authentication errors, clear tokens before retrying
+      if (
+        errorType === "Authentication Error" ||
+        errorType === "Account Mismatch Error"
+      ) {
+        logger.log("Authentication error detected, clearing tokens before retry");
+        // Send message to background script to clear all tokens
+        chrome.runtime.sendMessage({ action: "clearAuthTokens" }, () => {
+          resetUI();
+        });
+      } else {
         resetUI();
-      });
-    } else {
-      resetUI();
-    }
-  });
+      }
+    });
 }
 
 // Reset UI to original state
 function resetUI() {
   const container = document.querySelector(".container");
-  if (container.dataset.originalContent) {
+  if (container && container.dataset.originalContent) {
     logger.log("UI reset to original state");
 
     // Restore the original content
@@ -296,10 +299,10 @@ function createResultCard(title, content) {
   // Add event listener for copy button
   setTimeout(() => {
     const copyBtn = card.querySelector(".copy-btn");
-    copyBtn.addEventListener("click", () => {
-      copyToClipboard(content);
-      showToast("Copied to clipboard!");
-    });
+      copyBtn.addEventListener("click", () => {
+        copyToClipboard(content);
+        showToast("Copied to clipboard!");
+      });
   }, 0);
 
   return card;
@@ -329,21 +332,21 @@ function createFeedbackForTask(data, task) {
   const thumbsUp = feedbackDiv.querySelector(".thumbs-up");
   const thumbsDown = feedbackDiv.querySelector(".thumbs-down");
 
-  thumbsUp.addEventListener("click", () => {
-    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
-    sendFeedback(data, task, "thumbs_up");
-    thumbsUp.disabled = true;
-    thumbsDown.disabled = true;
-    thumbsUp.classList.add("selected");
-  });
+    thumbsUp.addEventListener("click", () => {
+      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_up`);
+      sendFeedback(data, task, "thumbs_up");
+      thumbsUp.disabled = true;
+      thumbsDown.disabled = true;
+      thumbsUp.classList.add("selected");
+    });
 
-  thumbsDown.addEventListener("click", () => {
-    logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
-    sendFeedback(data, task, "thumbs_down");
-    thumbsUp.disabled = true;
-    thumbsDown.disabled = true;
-    thumbsDown.classList.add("selected");
-  });
+    thumbsDown.addEventListener("click", () => {
+      logger.log(`Submitting feedback for task: ${task}, rating: thumbs_down`);
+      sendFeedback(data, task, "thumbs_down");
+      thumbsUp.disabled = true;
+      thumbsDown.disabled = true;
+      thumbsDown.classList.add("selected");
+    });
 
   return feedbackDiv;
 }
@@ -443,12 +446,12 @@ function sendFeedback(data, task, rating) {
 
 // Initialize the UI
 document.addEventListener("DOMContentLoaded", function () {
-  attachEventListeners();
+    attachEventListeners();
 
-  // Clear any existing status messages on fresh load
-  const status = document.getElementById("status");
-  if (status) {
-    status.style.display = "none";
-    status.textContent = "";
+    // Clear any existing status messages on fresh load
+    const status = document.getElementById("status");
+    if (status) {
+      status.style.display = "none";
+      status.textContent = "";
   }
 });
