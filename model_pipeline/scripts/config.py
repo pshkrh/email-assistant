@@ -57,5 +57,5 @@ MLFLOW_EXPERIMENT_NAME = "MailMate_Email_Assistant"
 DB_NAME = os.environ.get("DB_NAME", "mail_mate_user_data")
 USER = os.environ.get("DB_USER", "postgres")
 PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
-HOST = os.environ.get("DB_HOST", "35.226.149.135")
+HOST = os.environ.get("DB_HOST", "34.57.73.104")
 PORT = os.environ.get("DB_PORT", "5432")
