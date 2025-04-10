@@ -10,8 +10,9 @@ def save_to_db(message_data, best_output):
                 """
                 INSERT INTO user_feedback (
                     user_email, message_id, date, from_email, to_email, subject, body,
-                    messages_count, thread_id, summary, action_items, draft_reply
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    messages_count, thread_id, summary, action_items, draft_reply, prompt_strategy_summary, 
+                    prompt_strategy_action_items, prompt_strategy_draft_reply
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -31,6 +32,9 @@ def save_to_db(message_data, best_output):
                     best_output.get("Summary"),
                     best_output.get("Action_Items"),
                     best_output.get("Draft_Reply"),
+                    message_data["Prompt_Strategy"]["summary"],
+                    message_data["Prompt_Strategy"]["action_items"],
+                    message_data["Prompt_Strategy"]["draft_reply"],
                 ),
             )
             doc_id = cur.fetchone()["id"]

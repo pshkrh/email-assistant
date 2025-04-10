@@ -14,7 +14,12 @@ from save_to_database import save_to_db
 from update_database import update_user_feedback
 from db_helpers import get_existing_user_feedback
 from db_helpers import get_last_3_feedbacks
-from config import IN_CLOUD_RUN, GCP_PROJECT_ID, GMAIL_API_SECRET_ID, GMAIL_API_CREDENTIALS
+from config import (
+    IN_CLOUD_RUN,
+    GCP_PROJECT_ID,
+    GMAIL_API_SECRET_ID,
+    GMAIL_API_CREDENTIALS,
+)
 
 # Import the secret manager if running in Cloud Run
 if IN_CLOUD_RUN:
@@ -40,7 +45,9 @@ CORS(
 if IN_CLOUD_RUN:
     # In Cloud Run, get from Secret Manager
     try:
-        get_credentials_from_secret(GCP_PROJECT_ID, GMAIL_API_SECRET_ID, save_to_file=GMAIL_API_CREDENTIALS)
+        get_credentials_from_secret(
+            GCP_PROJECT_ID, GMAIL_API_SECRET_ID, save_to_file=GMAIL_API_CREDENTIALS
+        )
         app.logger.info(f"Gmail API credentials loaded from Secret Manager")
     except Exception as e:
         app.logger.error(f"Failed to load Gmail credentials from Secret Manager: {e}")
@@ -82,7 +89,7 @@ def fetch_gmail_thread():
         )
         results = {}
         task_regen_needed = {}
-        prompt_strategy = {}
+        prompt_strategy = {"summary": None, "action_items": None, "draft_reply": None}
         negative_examples_by_task = {}
 
         for task in requested_tasks:
@@ -160,6 +167,7 @@ def fetch_gmail_thread():
             "MessagesCount": data["messagesCount"],
             "Thread_Id": data["threadId"],
             "User_Email": data["userEmail"],
+            "Prompt_Strategy": prompt_strategy,
         }
 
         try:
