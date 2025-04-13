@@ -57,7 +57,9 @@ def generate_outputs(task, prompt, request_id=None):
     start_time = time.time()
     outputs = []
 
-    with mlflow.start_run(nested=True, run_name=f"generate_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"generate_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {
@@ -174,7 +176,9 @@ def process_email_body(
     """Generate outputs for a specific task."""
     start_time = time.time()
 
-    with mlflow.start_run(run_name=f"process_email_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"process_email_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {

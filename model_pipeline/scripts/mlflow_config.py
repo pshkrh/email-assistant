@@ -15,3 +15,7 @@ def start_experiment(experiment_name=MLFLOW_EXPERIMENT_NAME):
     """Start an MLflow experiment."""
     configure_mlflow()
     mlflow.set_experiment(experiment_name)
+    # Ensure no active run
+    if mlflow.active_run():
+        mlflow.end_run()
+    return mlflow.start_run()

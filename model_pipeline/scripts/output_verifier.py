@@ -116,7 +116,9 @@ def get_best_output(
     start_time = time.time()
     rules = load_structure_rules(STRUCTURE_PROMPTS_YAML, request_id)
 
-    with mlflow.start_run(nested=True, run_name=f"verify_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"verify_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {
@@ -234,7 +236,9 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
     """Verify all ranked outputs for a task and return the best one."""
     start_time = time.time()
 
-    with mlflow.start_run(run_name=f"verify_all_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"verify_all_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {

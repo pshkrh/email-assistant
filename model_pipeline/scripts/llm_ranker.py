@@ -53,7 +53,9 @@ def rank_outputs(criteria_prompt, outputs, task, request_id=None):
     """Rank outputs for a given task based on criteria."""
     start_time = time.time()
 
-    with mlflow.start_run(nested=True, run_name=f"rank_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"rank_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {
@@ -177,7 +179,9 @@ def rank_all_outputs(llm_outputs, task, body, request_id=None):
     """Rank outputs for a specific task."""
     start_time = time.time()
 
-    with mlflow.start_run(run_name=f"rank_all_{task}"):
+    with mlflow.start_run(
+        nested=True, run_name=f"rank_all_{task}_{request_id or 'unknown'}"
+    ):
         # Log parameters
         mlflow.log_params(
             {
