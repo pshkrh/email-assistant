@@ -25,6 +25,7 @@ from config import (
     GMAIL_API_CREDENTIALS,
 )
 from mlflow_config import configure_mlflow
+from config import MLFLOW_EXPERIMENT_NAME
 
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
@@ -33,6 +34,7 @@ app = Flask(__name__)
 
 # Set up MLflow
 configure_mlflow()  # Set tracking URI once
+mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)  # Set experiment once
 
 # Set up GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
