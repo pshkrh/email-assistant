@@ -13,7 +13,7 @@ google-api-python-client
 google-cloud-secret-manager
 flask
 flask_cors
-mlflow
+mlflow==2.16.2
 jinja2
 vertexai
 fuzzywuzzy
@@ -22,4 +22,5 @@ rouge-score
 bert-score
 spacy==3.8.3
 psycopg2-binary
+google-cloud-logging==3.10.0
 # blis  # Pin to a version with ARM64 pre-built wheel
