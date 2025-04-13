@@ -6,14 +6,13 @@ from llm_ranker import rank_all_outputs
 import re
 import yaml
 from config import STRUCTURE_PROMPTS_YAML, GCP_PROJECT_ID
+from send_notification import send_email_notification
 
-# Initialize GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("output_verifier")
 
 
 def load_structure_rules(yaml_file_path, request_id=None):
-    """Load structure rules from YAML file."""
     try:
         with open(yaml_file_path, "r") as file:
             rules = yaml.safe_load(file)
@@ -27,31 +26,16 @@ def load_structure_rules(yaml_file_path, request_id=None):
             severity="INFO",
         )
         return rules
-    except FileNotFoundError as e:
-        error_msg = f"Structure rule file not found: {yaml_file_path}"
+    except (FileNotFoundError, yaml.YAMLError, ValueError) as e:
+        error_msg = f"Error loading structure rules: {str(e)}"
         gcp_logger.log_struct(
             {"message": error_msg, "request_id": request_id or "unknown"},
             severity="ERROR",
         )
-        raise FileNotFoundError(error_msg)
-    except yaml.YAMLError as e:
-        error_msg = f"YAML parse error in structure rules: {str(e)}"
-        gcp_logger.log_struct(
-            {"message": error_msg, "request_id": request_id or "unknown"},
-            severity="ERROR",
-        )
-        raise ValueError(error_msg)
-    except Exception as e:
-        error_msg = f"Unexpected error loading structure rules: {str(e)}"
-        gcp_logger.log_struct(
-            {"message": error_msg, "request_id": request_id or "unknown"},
-            severity="ERROR",
-        )
-        raise RuntimeError(error_msg)
+        raise
 
 
 def verify_structure(output, task, rules, request_id=None):
-    """Verify that output matches the structure defined for the task."""
     if task not in rules:
         gcp_logger.log_struct(
             {
@@ -62,10 +46,8 @@ def verify_structure(output, task, rules, request_id=None):
             severity="WARNING",
         )
         return False
-
     task_rules = rules[task]
     result = False
-
     if task == "summary":
         bullet_found = any(
             re.search(pattern, output, flags=re.MULTILINE)
@@ -75,7 +57,6 @@ def verify_structure(output, task, rules, request_id=None):
             phrase in output for phrase in task_rules.get("prohibited_phrases", [])
         )
         result = bullet_found and not prohibited_found
-
     elif task == "action_items":
         bullet_found = any(
             re.search(pattern, output, flags=re.MULTILINE)
@@ -85,7 +66,6 @@ def verify_structure(output, task, rules, request_id=None):
             phrase in output for phrase in task_rules.get("prohibited_phrases", [])
         )
         result = bullet_found and not prohibited_found
-
     elif task == "draft_reply":
         required_phrases_met = all(
             req_phrase in output
@@ -95,7 +75,6 @@ def verify_structure(output, task, rules, request_id=None):
             phrase in output for phrase in task_rules.get("sign_off_phrases", [])
         )
         result = required_phrases_met and sign_off_found
-
     gcp_logger.log_struct(
         {
             "message": f"Verified structure for task {task}",
@@ -112,23 +91,20 @@ def verify_structure(output, task, rules, request_id=None):
 def get_best_output(
     ranked_outputs, task, body, userEmail, max_attempts=2, request_id=None
 ):
-    """Verify top output, fall back if needed, retry LLM if all fail."""
     start_time = time.time()
     rules = load_structure_rules(STRUCTURE_PROMPTS_YAML, request_id)
 
     with mlflow.start_run(
         nested=True, run_name=f"verify_{task}_{request_id or 'unknown'}"
     ):
-        # Log parameters
         mlflow.log_params(
             {
-                f"{task}_max_attempts": max_attempts,
+                "task": task,
                 "request_id": request_id or "unknown",
-                "user_email": userEmail,
-                f"{task}_input_output_count": len(ranked_outputs),
+                "max_attempts": max_attempts,
+                "input_output_count": len(ranked_outputs),
             }
         )
-
         gcp_logger.log_struct(
             {
                 "message": f"Starting verification for task {task}",
@@ -145,12 +121,10 @@ def get_best_output(
         while attempt < max_attempts:
             for i, output in enumerate(ranked_outputs):
                 if verify_structure(output, task, rules, request_id):
-                    mlflow.log_metric(f"{task}_verification_attempts", attempt + 1)
+                    mlflow.log_metric("verification_attempts", attempt + 1)
                     mlflow.log_text(output, f"{task}_verified_output.txt")
-
                     duration = time.time() - start_time
-                    mlflow.log_metric(f"{task}_verification_duration_seconds", duration)
-
+                    mlflow.log_metric("verification_duration_seconds", duration)
                     gcp_logger.log_struct(
                         {
                             "message": f"Verified output for task {task}",
@@ -163,7 +137,6 @@ def get_best_output(
                         severity="INFO",
                     )
                     return output
-
             attempt += 1
             gcp_logger.log_struct(
                 {
@@ -174,7 +147,6 @@ def get_best_output(
                 },
                 severity="WARNING",
             )
-
             try:
                 new_llm_outputs = process_email_body(
                     body, task, userEmail, {}, [], request_id=request_id
@@ -182,11 +154,10 @@ def get_best_output(
                 ranked_outputs = rank_all_outputs(
                     new_llm_outputs, task, body, request_id=request_id
                 )[task]
-                mlflow.log_metric(f"{task}_regen_attempts", attempt)
+                mlflow.log_metric("regen_attempts", attempt)
                 mlflow.log_dict(
                     {task: ranked_outputs}, f"{task}_regenerated_outputs.json"
                 )
-
                 gcp_logger.log_struct(
                     {
                         "message": f"Regenerated outputs for task {task}",
@@ -199,8 +170,7 @@ def get_best_output(
                 )
             except Exception as e:
                 error_msg = f"Regeneration failed for task {task}: {str(e)}"
-                mlflow.log_param(f"{task}_regen_error", str(e))
-                mlflow.log_text(str(e), f"{task}_regen_fallback_error.txt")
+                mlflow.log_param("regen_error", str(e))
                 gcp_logger.log_struct(
                     {
                         "message": error_msg,
@@ -210,15 +180,14 @@ def get_best_output(
                     },
                     severity="ERROR",
                 )
-                break  # Exit retry loop and fall back
-
-        # Fallback to top-ranked output
+                send_email_notification(
+                    "LLM Regeneration Failure", error_msg, request_id
+                )
+                break
         fallback_output = ranked_outputs[0]
         mlflow.log_text(fallback_output, f"{task}_fallback_output.txt")
-
         duration = time.time() - start_time
-        mlflow.log_metric(f"{task}_verification_duration_seconds", duration)
-
+        mlflow.log_metric("verification_duration_seconds", duration)
         gcp_logger.log_struct(
             {
                 "message": f"Fallback to top-ranked output for task {task}",
@@ -233,13 +202,11 @@ def get_best_output(
 
 
 def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=None):
-    """Verify all ranked outputs for a task and return the best one."""
     start_time = time.time()
 
     with mlflow.start_run(
         nested=True, run_name=f"verify_all_{task}_{request_id or 'unknown'}"
     ):
-        # Log parameters
         mlflow.log_params(
             {
                 "task": task,
@@ -247,7 +214,6 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
                 "user_email": userEmail,
             }
         )
-
         gcp_logger.log_struct(
             {
                 "message": f"Verifying all outputs for task {task}",
@@ -262,8 +228,7 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
             outputs = ranked_outputs_dict.get(task)
             if not outputs or not isinstance(outputs, list):
                 error_msg = f"No ranked outputs found for task '{task}'"
-                mlflow.log_param(f"{task}_verify_failed", True)
-                mlflow.log_text(error_msg, f"{task}_verify_failure.txt")
+                mlflow.log_param("verify_error", error_msg)
                 gcp_logger.log_struct(
                     {
                         "message": error_msg,
@@ -272,18 +237,14 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
                     },
                     severity="ERROR",
                 )
+                send_email_notification("LLM Output Failure", error_msg, request_id)
                 raise ValueError(error_msg)
-
             best_output = get_best_output(
                 outputs, task, body, userEmail, request_id=request_id
             )
-
-            # Log result
             mlflow.log_dict({task: best_output}, f"{task}_best_output.json")
-
             duration = time.time() - start_time
             mlflow.log_metric("verify_all_duration_seconds", duration)
-
             gcp_logger.log_struct(
                 {
                     "message": f"Completed verification for task {task}",
@@ -294,12 +255,9 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
                 severity="INFO",
             )
             return best_output
-
         except Exception as e:
             error_msg = f"Verification failed for task '{task}': {str(e)}"
-            mlflow.log_param(f"{task}_verify_failed", True)
-            mlflow.log_param(f"{task}_verify_error", str(e))
-            mlflow.log_text(str(e), f"{task}_verify_failure.txt")
+            mlflow.log_param("verify_error", str(e))
             gcp_logger.log_struct(
                 {
                     "message": error_msg,
@@ -308,4 +266,4 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
                 },
                 severity="ERROR",
             )
-            raise RuntimeError(error_msg) from e
+            raise

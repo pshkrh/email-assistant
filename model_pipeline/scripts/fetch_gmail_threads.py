@@ -10,14 +10,12 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from flask_cors import CORS
 import mlflow
-
 from llm_generator import process_email_body
 from llm_ranker import rank_all_outputs
 from output_verifier import verify_all_outputs
 from save_to_database import save_to_db
 from update_database import update_user_feedback
-from db_helpers import get_existing_user_feedback
-from db_helpers import get_last_3_feedbacks
+from db_helpers import get_existing_user_feedback, get_last_3_feedbacks
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
@@ -26,6 +24,7 @@ from config import (
 )
 from mlflow_config import configure_mlflow
 from config import MLFLOW_EXPERIMENT_NAME
+from send_notification import send_email_notification
 
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
@@ -41,7 +40,6 @@ gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("gmail_thread_fetcher")
 logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
 
-# Replace Flask's default logger with GCP logger for consistency
 app.logger.handlers = []
 app.logger.propagate = False
 
@@ -63,13 +61,15 @@ if IN_CLOUD_RUN:
         get_credentials_from_secret(
             GCP_PROJECT_ID, GMAIL_API_SECRET_ID, save_to_file=GMAIL_API_CREDENTIALS
         )
-        gcp_logger.log_text(
-            "Gmail API credentials loaded from Secret Manager", severity="INFO"
-        )
+        gcp_logger.log_text("Gmail API credentials loaded", severity="INFO")
     except Exception as e:
         gcp_logger.log_struct(
             {"message": "Failed to load Gmail credentials", "error": str(e)},
             severity="ERROR",
+        )
+        send_email_notification(
+            "Gmail API Credential Failure",
+            f"Failed to load Gmail API credentials: {str(e)}",
         )
 
 
@@ -96,8 +96,6 @@ def fetch_gmail_thread():
                 "messagesCount",
                 "body",
             ]
-
-            # Validate input
             if not all(
                 field in data and data[field] is not None for field in required_fields
             ):
@@ -219,7 +217,6 @@ def fetch_gmail_thread():
             for task in requested_tasks:
                 if not task_regen_needed.get(task):
                     continue
-
                 gcp_logger.log_struct(
                     {
                         "message": f"Generating output for task {task}",
@@ -239,14 +236,12 @@ def fetch_gmail_thread():
                         negative_examples=negative_examples_by_task.get(task, []),
                         request_id=request_id,
                     )
-
                     llm_ranker_output = rank_all_outputs(
                         llm_outputs=llm_generator_output,
                         task=task,
                         body=body,
                         request_id=request_id,
                     )
-
                     best_output = verify_all_outputs(
                         ranked_outputs_dict=llm_ranker_output,
                         task=task,
@@ -254,12 +249,10 @@ def fetch_gmail_thread():
                         userEmail=email,
                         request_id=request_id,
                     )
-
                     results[task] = best_output
 
                     # Log task output as artifact
                     mlflow.log_dict({task: best_output}, f"{task}_output.json")
-
                 except Exception as e:
                     error_msg = f"Error generating output for task '{task}': {str(e)}"
                     gcp_logger.log_struct(
@@ -271,6 +264,9 @@ def fetch_gmail_thread():
                         severity="ERROR",
                     )
                     mlflow.log_param(f"{task}_error", str(e))
+                    send_email_notification(
+                        "LLM Processing Failure", error_msg, request_id
+                    )
                     return jsonify({"error": error_msg}), 500
 
             # Prepare data for database
@@ -305,7 +301,6 @@ def fetch_gmail_thread():
                     table_docid = existing_record["id"]
                 else:
                     table_docid = None
-
                 gcp_logger.log_struct(
                     {
                         "message": "Saved to database",
@@ -316,16 +311,15 @@ def fetch_gmail_thread():
                     severity="INFO",
                 )
                 mlflow.log_param("doc_id", table_docid)
-
             except Exception as e:
                 error_msg = f"Error saving to database: {str(e)}"
                 gcp_logger.log_struct(
                     {"message": error_msg, "request_id": request_id}, severity="ERROR"
                 )
                 mlflow.log_param("db_error", str(e))
+                send_email_notification("Database Save Failure", error_msg, request_id)
                 return jsonify({"error": error_msg}), 500
 
-            # Prepare response
             response = {
                 "threadId": thread_id,
                 "userEmail": email,
@@ -347,15 +341,14 @@ def fetch_gmail_thread():
             )
             mlflow.log_metric("request_duration_seconds", duration)
             mlflow.log_dict(response, "response.json")
-
             return jsonify(response)
-
         except Exception as e:
             error_msg = f"Unexpected server error: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
             )
             mlflow.log_param("server_error", str(e))
+            send_email_notification("Server Error", error_msg, request_id)
             return jsonify({"error": error_msg}), 500
 
 
@@ -364,7 +357,6 @@ def store_feedback():
     """Store user feedback for a task."""
     request_id = str(uuid.uuid4())
     start_time = time.time()
-
     gcp_logger.log_struct(
         {"message": "Received store_feedback request", "request_id": request_id},
         severity="INFO",
@@ -381,7 +373,6 @@ def store_feedback():
                 "timestamp",
                 "docId",
             ]
-
             if not data:
                 error_msg = "Missing JSON payload"
                 gcp_logger.log_struct(
@@ -389,7 +380,6 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
-
             missing = [field for field in required_fields if field not in data]
             if missing:
                 error_msg = f"Missing required fields: {', '.join(missing)}"
@@ -398,11 +388,9 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
-
             task = data["task"]
             feedback = 0 if data["rating"] == "thumbs_down" else 1
             doc_id = data["docId"]
-
             mlflow.log_params(
                 {
                     "user_email": data["userEmail"],
@@ -413,7 +401,6 @@ def store_feedback():
                 }
             )
             mlflow.log_dict(data, "feedback_request.json")
-
             gcp_logger.log_struct(
                 {
                     "message": "Processing feedback",
@@ -424,13 +411,11 @@ def store_feedback():
                 },
                 severity="DEBUG",
             )
-
             valid_tasks = {
                 "summary": "summary_feedback",
                 "action_items": "action_items_feedback",
                 "draft_reply": "draft_reply_feedback",
             }
-
             column_name = valid_tasks.get(task)
             if not column_name:
                 error_msg = f"Invalid task type: {task}"
@@ -439,12 +424,10 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
-
             try:
                 response = update_user_feedback(
                     column_name=column_name, feedback=feedback, doc_id=doc_id
                 )
-
                 gcp_logger.log_struct(
                     {
                         "message": "Feedback stored successfully",
@@ -454,26 +437,26 @@ def store_feedback():
                     severity="INFO",
                 )
                 mlflow.log_dict(response, "feedback_response.json")
-
                 duration = time.time() - start_time
                 mlflow.log_metric("feedback_duration_seconds", duration)
-
                 return jsonify(response)
-
             except Exception as db_error:
                 error_msg = f"Database update failed: {str(db_error)}"
                 gcp_logger.log_struct(
                     {"message": error_msg, "request_id": request_id}, severity="ERROR"
                 )
                 mlflow.log_param("db_error", str(db_error))
+                send_email_notification(
+                    "Database Update Failure", error_msg, request_id
+                )
                 return jsonify({"error": error_msg}), 500
-
         except Exception as e:
             error_msg = f"Unexpected server error in store_feedback: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
             )
             mlflow.log_param("server_error", str(e))
+            send_email_notification("Server Error", error_msg, request_id)
             return jsonify({"error": error_msg}), 500
 
 

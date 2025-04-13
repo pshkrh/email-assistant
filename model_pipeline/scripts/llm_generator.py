@@ -20,17 +20,13 @@ from config import (
 from load_prompts import load_prompts
 from render_prompt import render_prompt
 from render_alternate_prompt import render_alternate_prompt
+from send_notification import send_email_notification
 
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
 load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
-# GCP settings
-GCP_LOCATION = os.getenv("GCP_LOCATION")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
-
-# Initialize GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("llm_generator")
 
@@ -48,8 +44,17 @@ else:
 
     CREDENTIALS, GCP_PROJECT_ID = load_credentials_from_file(SERVICE_ACCOUNT_FILE)
 
-# Initialize Vertex AI
-vertexai.init(project=GCP_PROJECT_ID, location=GCP_LOCATION, credentials=CREDENTIALS)
+try:
+    vertexai.init(
+        project=GCP_PROJECT_ID,
+        location=os.getenv("GCP_LOCATION"),
+        credentials=CREDENTIALS,
+    )
+except Exception as e:
+    error_msg = f"Vertex AI initialization failed: {str(e)}"
+    gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
+    send_email_notification("LLM Connection Failure", error_msg)
+    raise
 
 
 def generate_outputs(task, prompt, request_id=None):
@@ -60,14 +65,7 @@ def generate_outputs(task, prompt, request_id=None):
     with mlflow.start_run(
         nested=True, run_name=f"generate_{task}_{request_id or 'unknown'}"
     ):
-        # Log parameters
-        mlflow.log_params(
-            {
-                f"{task}_prompt": prompt[:500],  # Truncate for brevity
-                "request_id": request_id or "unknown",
-            }
-        )
-
+        mlflow.log_params({"task": task, "request_id": request_id or "unknown"})
         gcp_logger.log_struct(
             {
                 "message": f"Generating outputs for task {task}",
@@ -87,26 +85,31 @@ def generate_outputs(task, prompt, request_id=None):
                 response_text = (
                     response.text.strip() if response and response.text else ""
                 )
-
                 if not response_text:
-                    raise ValueError("Empty response from LLM")
-
-                # Parse response
+                    error_msg = f"Empty response from LLM for task {task}"
+                    outputs.append(error_msg)
+                    mlflow.log_text(error_msg, f"{task}_output_{i}_error.txt")
+                    gcp_logger.log_struct(
+                        {
+                            "message": error_msg,
+                            "request_id": request_id or "unknown",
+                            "task": task,
+                        },
+                        severity="ERROR",
+                    )
+                    send_email_notification("LLM Output Failure", error_msg, request_id)
+                    continue
                 if response_text.startswith("{"):
                     structured_data = json.loads(response_text)
                 else:
-                    if f"{task}:" in response_text:
-                        content = (
-                            response_text.split(f"{task}:")[1].split("```")[0].strip()
-                        )
-                    else:
-                        content = f"[Fallback] No {task} detected."
+                    content = (
+                        response_text.split(f"{task}:")[1].split("```")[0].strip()
+                        if f"{task}:" in response_text
+                        else f"[Fallback] No {task} detected."
+                    )
                     structured_data = {task: content}
-
                 output = structured_data.get(task, f"[Missing key '{task}']")
                 outputs.append(output)
-
-                # Log output
                 mlflow.log_text(output, f"{task}_output_{i}.txt")
                 gcp_logger.log_struct(
                     {
@@ -117,9 +120,8 @@ def generate_outputs(task, prompt, request_id=None):
                     },
                     severity="DEBUG",
                 )
-
             except Exception as e:
-                error_msg = f"[Error] Failed to generate output {i}: {str(e)}"
+                error_msg = f"Failed to generate output {i} for task {task}: {str(e)}"
                 outputs.append(error_msg)
                 mlflow.log_text(error_msg, f"{task}_output_{i}_error.txt")
                 gcp_logger.log_struct(
@@ -130,16 +132,13 @@ def generate_outputs(task, prompt, request_id=None):
                     },
                     severity="ERROR",
                 )
+                send_email_notification("LLM Connection Failure", error_msg, request_id)
+                continue
 
-        # Log metrics
         duration = time.time() - start_time
         mlflow.log_metrics(
-            {
-                f"{task}_output_count": len(outputs),
-                f"{task}_generation_duration_seconds": duration,
-            }
+            {"output_count": len(outputs), "generation_duration_seconds": duration}
         )
-
         gcp_logger.log_struct(
             {
                 "message": f"Completed generation for task {task}",
@@ -150,17 +149,17 @@ def generate_outputs(task, prompt, request_id=None):
             },
             severity="INFO",
         )
-
     return outputs
 
 
 def get_prompt_for_task(task, strategy="default"):
     """Load prompt based on strategy."""
     try:
-        if strategy == "default":
-            prompts = load_prompts(GENERATOR_PROMPTS_YAML)
-        else:
-            prompts = load_prompts(ALTERNATE_GENERATOR_PROMPTS_YAML)
+        prompts = load_prompts(
+            GENERATOR_PROMPTS_YAML
+            if strategy == "default"
+            else ALTERNATE_GENERATOR_PROMPTS_YAML
+        )
         return prompts.get(task)
     except Exception as e:
         gcp_logger.log_struct(
@@ -173,13 +172,11 @@ def get_prompt_for_task(task, strategy="default"):
 def process_email_body(
     body, task, user_email, prompt_strategy, negative_examples, request_id=None
 ):
-    """Generate outputs for a specific task."""
     start_time = time.time()
 
     with mlflow.start_run(
         nested=True, run_name=f"process_email_{task}_{request_id or 'unknown'}"
     ):
-        # Log parameters
         mlflow.log_params(
             {
                 "task": task,
@@ -189,7 +186,6 @@ def process_email_body(
                 "body_length": len(body),
             }
         )
-
         gcp_logger.log_struct(
             {
                 "message": f"Processing email body for task {task}",
@@ -204,20 +200,10 @@ def process_email_body(
         try:
             prompt_style = prompt_strategy.get(task, "default")
             selected_prompt = get_prompt_for_task(task, strategy=prompt_style)
-
             if not selected_prompt:
                 error_msg = f"No prompt found for task {task}"
-                gcp_logger.log_struct(
-                    {
-                        "message": error_msg,
-                        "request_id": request_id or "unknown",
-                        "task": task,
-                    },
-                    severity="ERROR",
-                )
                 mlflow.log_param("error", error_msg)
                 raise ValueError(error_msg)
-
             full_prompt = (
                 render_prompt(selected_prompt, body, user_email)
                 if prompt_style == "default"
@@ -225,21 +211,10 @@ def process_email_body(
                     selected_prompt, body, user_email, negative_examples
                 )
             )
-
             if not full_prompt:
                 error_msg = f"Invalid prompt generated for task {task}"
-                gcp_logger.log_struct(
-                    {
-                        "message": error_msg,
-                        "request_id": request_id or "unknown",
-                        "task": task,
-                    },
-                    severity="ERROR",
-                )
                 mlflow.log_param("error", error_msg)
                 raise ValueError(error_msg)
-
-            # Log prompt as artifact
             mlflow.log_text(full_prompt, f"{task}_full_prompt.txt")
             gcp_logger.log_struct(
                 {
@@ -250,12 +225,8 @@ def process_email_body(
                 },
                 severity="DEBUG",
             )
-
             llm_outputs = {task: generate_outputs(task, full_prompt, request_id)}
-
-            # Log outputs
             mlflow.log_dict(llm_outputs, f"{task}_outputs.json")
-
             duration = time.time() - start_time
             mlflow.log_metric("process_duration_seconds", duration)
             gcp_logger.log_struct(
@@ -268,11 +239,10 @@ def process_email_body(
                 },
                 severity="INFO",
             )
-
             return llm_outputs
-
-        except FileNotFoundError as e:
-            error_msg = f"Prompt file not found: {str(e)}"
+        except (FileNotFoundError, yaml.YAMLError, ValueError) as e:
+            error_msg = f"Error in process_email_body: {str(e)}"
+            mlflow.log_param("error", error_msg)
             gcp_logger.log_struct(
                 {
                     "message": error_msg,
@@ -281,31 +251,4 @@ def process_email_body(
                 },
                 severity="ERROR",
             )
-            mlflow.log_param("error", error_msg)
-            raise FileNotFoundError(error_msg)
-
-        except yaml.YAMLError as e:
-            error_msg = f"YAML loading error: {str(e)}"
-            gcp_logger.log_struct(
-                {
-                    "message": error_msg,
-                    "request_id": request_id or "unknown",
-                    "task": task,
-                },
-                severity="ERROR",
-            )
-            mlflow.log_param("error", error_msg)
-            raise ValueError(error_msg)
-
-        except Exception as e:
-            error_msg = f"Unexpected error in process_email_body: {str(e)}"
-            gcp_logger.log_struct(
-                {
-                    "message": error_msg,
-                    "request_id": request_id or "unknown",
-                    "task": task,
-                },
-                severity="ERROR",
-            )
-            mlflow.log_param("error", error_msg)
-            raise RuntimeError(error_msg) from e
+            raise
