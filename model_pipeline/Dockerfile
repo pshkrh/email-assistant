@@ -12,16 +12,18 @@ COPY requirements.txt .
 
 RUN mkdir -p /model_pipeline/credentials
 
-# Install the most problematic packages first with exact versions
+# Install a compatible protobuf version first
 RUN pip install --upgrade pip && \
-    pip install --no-cache-dir \
-    protobuf==3.19.6 \
+    pip install --no-cache-dir protobuf==4.23.4
+
+# Install compatible versions of core dependencies
+RUN pip install --no-cache-dir \
     opentelemetry-proto==1.26.0 \
-    google-cloud-resource-manager==1.12.2 \
-    googleapis-common-protos==1.62.0 \
-    grpcio-status==1.62.0 \
     google-cloud-core==2.4.1 \
     google-cloud-audit-log==0.2.5 \
+    grpcio-status==1.54.0 \
+    googleapis-common-protos==1.60.0 \
+    google-cloud-resource-manager==1.10.0 \
     google-cloud-logging==3.10.0 \
     google-cloud-secret-manager==2.20.0
 
