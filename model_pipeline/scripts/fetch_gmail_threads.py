@@ -73,6 +73,13 @@ if IN_CLOUD_RUN:
         )
 
 
+@app.route("/health", methods=["GET"])
+def health_check():
+    """Health check endpoint for uptime monitoring."""
+    gcp_logger.log_text("Health check requested", severity="INFO")
+    return jsonify({"status": "healthy"}), 200
+
+
 @app.route("/fetch_gmail_thread", methods=["POST"])
 def fetch_gmail_thread():
     """Fetch email thread details for a given thread ID."""
