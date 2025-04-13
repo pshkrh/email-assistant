@@ -18,7 +18,7 @@ RUN mkdir -p /model_pipeline/credentials
 RUN pip install --upgrade pip && \
     grep -v bert-score requirements.txt > requirements_filtered.txt && \
     pip install --no-cache-dir torch==2.6.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu && \
-    pip install blis==0.7.11 thinc==8.3.2 bert-score google-cloud-secret-manager google-cloud-logging==3.10.0 -r requirements_filtered.txt && \
+    pip install blis==1.0.0 thinc==8.3.2 bert-score google-cloud-secret-manager google-cloud-logging==3.10.0 -r requirements_filtered.txt && \
     python -m spacy download en_core_web_sm
 
 COPY . .
