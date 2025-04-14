@@ -46,11 +46,15 @@ try:
     else:
         experiment_id = experiment.experiment_id
 
-    gcp_logger.log_text(f"Using MLflow experiment ID: {experiment_id}", severity="INFO")
+    gcp_logger.log_struct(
+        {"message": f"Using MLflow experiment ID: {experiment_id}"},
+        severity="INFO",
+    )
 except Exception as e:
     experiment_id = None
-    gcp_logger.log_text(
-        f"Failed to get MLflow experiment: {str(e)}, using default", severity="WARNING"
+    gcp_logger.log_struct(
+        {"message": f"Failed to get MLflow experiment: {str(e)}, using default"},
+        severity="WARNING",
     )
 
 app.logger.handlers = []

@@ -16,7 +16,8 @@ def configure_mlflow(log_dir=MLFLOW_LOG_DIR):
         experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
         if experiment is None:
             # Create it if it doesn't exist
-            experiment = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+            mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+            experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
         return experiment
     except Exception as e:
         # Log the error but continue - will fallback to default experiment
