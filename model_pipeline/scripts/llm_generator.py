@@ -237,7 +237,10 @@ def process_email_body(
             )
             llm_outputs = {
                 task: generate_outputs(
-                    task, full_prompt, request_id, experiment_id=experiment_id
+                    task=task,
+                    full_prompt=full_prompt,
+                    request_id=request_id,
+                    experiment_id=experiment_id,
                 )
             }
             mlflow.log_dict(llm_outputs, f"{task}_outputs.json")

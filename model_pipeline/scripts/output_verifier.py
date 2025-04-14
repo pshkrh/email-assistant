@@ -157,10 +157,20 @@ def get_best_output(
             )
             try:
                 new_llm_outputs = process_email_body(
-                    body, task, userEmail, {}, [], request_id=request_id
+                    body=body,
+                    task=task,
+                    user_email=userEmail,
+                    prompt_strategy={},
+                    negative_examples=[],
+                    request_id=request_id,
+                    experiment_id=experiment_id,
                 )
                 ranked_outputs = rank_all_outputs(
-                    new_llm_outputs, task, body, request_id=request_id
+                    llm_outputs=new_llm_outputs,
+                    task=task,
+                    body=body,
+                    request_id=request_id,
+                    experiment_id=experiment_id,
                 )[task]
                 mlflow.log_metric("regen_attempts", attempt)
                 mlflow.log_dict(
@@ -252,10 +262,10 @@ def verify_all_outputs(
                 send_email_notification("LLM Output Failure", error_msg, request_id)
                 raise ValueError(error_msg)
             best_output = get_best_output(
-                outputs,
-                task,
-                body,
-                userEmail,
+                outputs=outputs,
+                task=task,
+                body=body,
+                userEmail=userEmail,
                 experiment_id=experiment_id,
                 request_id=request_id,
             )
