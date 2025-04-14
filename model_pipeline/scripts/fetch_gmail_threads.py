@@ -40,10 +40,18 @@ logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
 configure_mlflow()  # Set tracking URI once
 # Try to set the experiment, fall back to default if it fails
 try:
-    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+    experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
+    if experiment is None:
+        # Create it if it doesn't exist
+        experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+    else:
+        experiment_id = experiment.experiment_id
+
+    gcp_logger.log_text(f"Using MLflow experiment ID: {experiment_id}", severity="INFO")
 except Exception as e:
+    experiment_id = None
     gcp_logger.log_text(
-        f"Failed to set MLflow experiment: {str(e)}, using default", severity="WARNING"
+        f"Failed to get MLflow experiment: {str(e)}, using default", severity="WARNING"
     )
 
 app.logger.handlers = []
@@ -99,7 +107,9 @@ def fetch_gmail_thread():
     )
 
     # Start MLflow run for this endpoint
-    with mlflow.start_run(run_name=f"fetch_gmail_thread_{request_id}"):
+    with mlflow.start_run(
+        experiment_id=experiment_id, run_name=f"fetch_gmail_thread_{request_id}"
+    ):
         try:
             data = request.get_json()
             required_fields = [
@@ -245,6 +255,7 @@ def fetch_gmail_thread():
                         body=body,
                         task=task,
                         user_email=email,
+                        experiment_id=experiment_id,
                         prompt_strategy=prompt_strategy,
                         negative_examples=negative_examples_by_task.get(task, []),
                         request_id=request_id,
@@ -253,6 +264,7 @@ def fetch_gmail_thread():
                         llm_outputs=llm_generator_output,
                         task=task,
                         body=body,
+                        experiment_id=experiment_id,
                         request_id=request_id,
                     )
                     best_output = verify_all_outputs(
@@ -260,6 +272,7 @@ def fetch_gmail_thread():
                         task=task,
                         body=body,
                         userEmail=email,
+                        experiment_id=experiment_id,
                         request_id=request_id,
                     )
                     results[task] = best_output
@@ -375,7 +388,9 @@ def store_feedback():
         severity="INFO",
     )
 
-    with mlflow.start_run(run_name=f"store_feedback_{request_id}"):
+    with mlflow.start_run(
+        experiment_id=experiment_id, run_name=f"store_feedback_{request_id}"
+    ):
         try:
             data = request.get_json()
             required_fields = [

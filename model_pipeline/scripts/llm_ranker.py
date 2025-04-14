@@ -54,12 +54,14 @@ except Exception as e:
     raise
 
 
-def rank_outputs(criteria_prompt, outputs, task, request_id=None):
+def rank_outputs(criteria_prompt, outputs, task, experiment_id, request_id=None):
     """Rank outputs for a given task based on criteria."""
     start_time = time.time()
 
     with mlflow.start_run(
-        nested=True, run_name=f"rank_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"rank_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params(
             {
@@ -165,11 +167,13 @@ def rank_outputs(criteria_prompt, outputs, task, request_id=None):
             return outputs
 
 
-def rank_all_outputs(llm_outputs, task, body, request_id=None):
+def rank_all_outputs(llm_outputs, task, body, experiment_id, request_id=None):
     start_time = time.time()
 
     with mlflow.start_run(
-        nested=True, run_name=f"rank_all_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"rank_all_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params(
             {
@@ -249,6 +253,7 @@ def rank_all_outputs(llm_outputs, task, body, request_id=None):
                     criteria_prompt=full_prompt,
                     outputs=llm_outputs[task],
                     task=task,
+                    experiment_id=experiment_id,
                     request_id=request_id,
                 )
             }

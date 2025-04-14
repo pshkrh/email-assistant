@@ -74,7 +74,7 @@ def calculate_action_item_similarity(pred_text, true_text):
     return final_score
 
 
-def validate_outputs(predicted_outputs_df, labeled_output_df):
+def validate_outputs(predicted_outputs_df, labeled_output_df, experiment_id):
     """Compare predicted outputs with labeled data using BERTScore and Named Entity Matching for action items."""
 
     results = {
@@ -130,7 +130,7 @@ def validate_outputs(predicted_outputs_df, labeled_output_df):
         "action_item": defaultdict(dict),
         "draft_reply": defaultdict(dict),
     }
-    with mlflow.start_run(nested=True):
+    with mlflow.start_run(experiment_id=experiment_id, nested=True):
         for task in results.keys():
             for threshold in np.arange(0.6, 1.0, 0.05):
                 precision = (

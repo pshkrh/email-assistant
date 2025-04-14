@@ -31,7 +31,7 @@ def send_fetch_gmail_thread_request(email, thread_id):
         return {"error": str(e)}
 
 
-def process_emails(data_source="enron", email=None, thread_id=None):
+def process_emails(experiment_id, data_source="enron", email=None, thread_id=None):
     """Process emails from Enron or Gmail with MLflow tracking."""
     if data_source == "enron":
         df = load_enron_data()
@@ -54,7 +54,9 @@ def process_emails(data_source="enron", email=None, thread_id=None):
         raise ValueError("Invalid data source or missing parameters")
 
     predicted_outputs = {}
-    with mlflow.start_run(nested=True, run_name=f"{data_source}_processing"):
+    with mlflow.start_run(
+        nested=True, experiment_id=experiment_id, run_name=f"{data_source}_processing"
+    ):
         mlflow.log_param("data_source", data_source)
         if data_source == "gmail":
             mlflow.log_param("email", email)
@@ -64,7 +66,9 @@ def process_emails(data_source="enron", email=None, thread_id=None):
         for idx, row in data_iter:
             body = row["Body"]
             msg_id = row["Message-ID"]
-            with mlflow.start_run(nested=True, run_name=f"msg_{msg_id}"):
+            with mlflow.start_run(
+                nested=True, experiment_id=experiment_id, run_name=f"msg_{msg_id}"
+            ):
                 outputs = process_email_body(
                     body, tasks=tasks, user_email=email or "unknown"
                 )

@@ -89,13 +89,21 @@ def verify_structure(output, task, rules, request_id=None):
 
 
 def get_best_output(
-    ranked_outputs, task, body, userEmail, max_attempts=2, request_id=None
+    ranked_outputs,
+    task,
+    body,
+    userEmail,
+    experiment_id,
+    max_attempts=2,
+    request_id=None,
 ):
     start_time = time.time()
     rules = load_structure_rules(STRUCTURE_PROMPTS_YAML, request_id)
 
     with mlflow.start_run(
-        nested=True, run_name=f"verify_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"verify_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params(
             {
@@ -201,11 +209,15 @@ def get_best_output(
         return fallback_output
 
 
-def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=None):
+def verify_all_outputs(
+    ranked_outputs_dict, task, body, userEmail, experiment_id, request_id=None
+):
     start_time = time.time()
 
     with mlflow.start_run(
-        nested=True, run_name=f"verify_all_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"verify_all_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params(
             {
@@ -240,7 +252,12 @@ def verify_all_outputs(ranked_outputs_dict, task, body, userEmail, request_id=No
                 send_email_notification("LLM Output Failure", error_msg, request_id)
                 raise ValueError(error_msg)
             best_output = get_best_output(
-                outputs, task, body, userEmail, request_id=request_id
+                outputs,
+                task,
+                body,
+                userEmail,
+                experiment_id=experiment_id,
+                request_id=request_id,
             )
             mlflow.log_dict({task: best_output}, f"{task}_best_output.json")
             duration = time.time() - start_time

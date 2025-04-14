@@ -57,13 +57,15 @@ except Exception as e:
     raise
 
 
-def generate_outputs(task, prompt, request_id=None):
+def generate_outputs(task, prompt, experiment_id, request_id=None):
     """Generate 3 outputs for a given task using LLM."""
     start_time = time.time()
     outputs = []
 
     with mlflow.start_run(
-        nested=True, run_name=f"generate_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"generate_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params({"task": task, "request_id": request_id or "unknown"})
         gcp_logger.log_struct(
@@ -170,12 +172,20 @@ def get_prompt_for_task(task, strategy="default"):
 
 
 def process_email_body(
-    body, task, user_email, prompt_strategy, negative_examples, request_id=None
+    body,
+    task,
+    user_email,
+    prompt_strategy,
+    negative_examples,
+    experiment_id,
+    request_id=None,
 ):
     start_time = time.time()
 
     with mlflow.start_run(
-        nested=True, run_name=f"process_email_{task}_{request_id or 'unknown'}"
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"process_email_{task}_{request_id or 'unknown'}",
     ):
         mlflow.log_params(
             {
@@ -225,7 +235,11 @@ def process_email_body(
                 },
                 severity="DEBUG",
             )
-            llm_outputs = {task: generate_outputs(task, full_prompt, request_id)}
+            llm_outputs = {
+                task: generate_outputs(
+                    task, full_prompt, request_id, experiment_id=experiment_id
+                )
+            }
             mlflow.log_dict(llm_outputs, f"{task}_outputs.json")
             duration = time.time() - start_time
             mlflow.log_metric("process_duration_seconds", duration)
