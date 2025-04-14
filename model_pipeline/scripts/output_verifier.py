@@ -262,7 +262,7 @@ def verify_all_outputs(
                 send_email_notification("LLM Output Failure", error_msg, request_id)
                 raise ValueError(error_msg)
             best_output = get_best_output(
-                outputs=outputs,
+                ranked_outputs=outputs,
                 task=task,
                 body=body,
                 userEmail=userEmail,
