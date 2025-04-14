@@ -35,6 +35,7 @@ os.makedirs(CREDENTIALS_DIR, exist_ok=True)  # Ensure the directory exists
 
 # Secret Manager IDs (for Cloud Run)
 GMAIL_API_SECRET_ID = "gmail-credentials"
+GMAIL_NOTIFICATION_SECRET_ID = "gmail-notification"
 SERVICE_ACCOUNT_SECRET_ID = "service-account-credentials"
 
 # Credential paths

@@ -9,7 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
-    GMAIL_API_SECRET_ID,
+    GMAIL_NOTIFICATION_SECRET_ID,
     GMAIL_API_CREDENTIALS,
 )
 
@@ -27,15 +27,13 @@ def send_email_notification(error_type, error_message, request_id=None):
         # Load credentials
         if IN_CLOUD_RUN:
             creds_dict = get_credentials_from_secret(
-                GCP_PROJECT_ID, GMAIL_API_SECRET_ID
+                GCP_PROJECT_ID, GMAIL_NOTIFICATION_SECRET_ID
             )
             credentials = Credentials.from_authorized_user_info(creds_dict)
         else:
-            if not os.path.exists(GMAIL_API_CREDENTIALS):
-                raise FileNotFoundError(
-                    f"Gmail API credentials not found at {GMAIL_API_CREDENTIALS}"
-                )
-            credentials = Credentials.from_authorized_user_file(GMAIL_API_CREDENTIALS)
+            raise NotImplementedError(
+                "Local credential loading not supported in production"
+            )
 
         # Build Gmail service
         service = build("gmail", "v1", credentials=credentials)
@@ -43,7 +41,7 @@ def send_email_notification(error_type, error_message, request_id=None):
         # Email details
         sender = os.getenv(
             "NOTIFICATION_SENDER_EMAIL",
-            "gmail-sender@email-assistant-449706.iam.gserviceaccount.com",
+            "shubhdesai111@gmail.com",
         )
         recipient = os.getenv("NOTIFICATION_RECIPIENT_EMAIL", "shubhdesai4@gmail.com")
         subject = f"Alert: {error_type} Failure in Email Assistant"
