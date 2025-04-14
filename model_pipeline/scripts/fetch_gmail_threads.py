@@ -36,26 +36,32 @@ gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("gmail_thread_fetcher")
 logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
 
-# Set up MLflow
-experiment = configure_mlflow()  # Set tracking URI once
-# Try to set the experiment, fall back to default if it fails
-try:
-    if experiment is None:
-        # Create it if it doesn't exist
-        experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
-    else:
-        experiment_id = experiment.experiment_id
 
-    gcp_logger.log_struct(
-        {"message": f"Using MLflow experiment ID: {experiment_id}"},
-        severity="INFO",
-    )
-except Exception as e:
-    experiment_id = None
-    gcp_logger.log_struct(
-        {"message": f"Failed to get MLflow experiment: {str(e)}, using default"},
-        severity="WARNING",
-    )
+def setup_mlflow():
+    # Set up MLflow
+    experiment = configure_mlflow()  # Set tracking URI once
+    # Try to set the experiment, fall back to default if it fails
+    try:
+        if experiment is None:
+            # Create it if it doesn't exist
+            experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+        else:
+            experiment_id = experiment.experiment_id
+
+        gcp_logger.log_struct(
+            {"message": f"Using MLflow experiment ID: {experiment_id}"},
+            severity="INFO",
+        )
+
+        return experiment_id
+    except Exception as e:
+        experiment_id = None
+        gcp_logger.log_struct(
+            {"message": f"Failed to get MLflow experiment: {str(e)}, using default"},
+            severity="WARNING",
+        )
+        return experiment_id
+
 
 app.logger.handlers = []
 app.logger.propagate = False
@@ -100,6 +106,7 @@ def health_check():
 @app.route("/fetch_gmail_thread", methods=["POST"])
 def fetch_gmail_thread():
     """Fetch email thread details for a given thread ID."""
+    experiment_id = setup_mlflow()
     request_id = str(uuid.uuid4())  # Unique ID for request correlation
     start_time = time.time()
 
@@ -384,6 +391,7 @@ def fetch_gmail_thread():
 @app.route("/store_feedback", methods=["POST"])
 def store_feedback():
     """Store user feedback for a task."""
+    experiment_id = setup_mlflow()
     request_id = str(uuid.uuid4())
     start_time = time.time()
     gcp_logger.log_struct(
