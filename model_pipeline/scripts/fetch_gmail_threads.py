@@ -31,14 +31,20 @@ if IN_CLOUD_RUN:
 
 app = Flask(__name__)
 
-# Set up MLflow
-configure_mlflow()  # Set tracking URI once
-mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)  # Set experiment once
-
 # Set up GCP Cloud Logging
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("gmail_thread_fetcher")
 logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
+
+# Set up MLflow
+configure_mlflow()  # Set tracking URI once
+# Try to set the experiment, fall back to default if it fails
+try:
+    mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+except Exception as e:
+    gcp_logger.log_text(
+        f"Failed to set MLflow experiment: {str(e)}, using default", severity="WARNING"
+    )
 
 app.logger.handlers = []
 app.logger.propagate = False

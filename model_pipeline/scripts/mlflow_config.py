@@ -10,6 +10,17 @@ def configure_mlflow(log_dir=MLFLOW_LOG_DIR):
         os.makedirs(log_dir, exist_ok=True)
     mlflow.set_tracking_uri(tracking_uri)
 
+    # Ensure the experiment exists
+    try:
+        # Try to get the experiment by name
+        experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
+        if experiment is None:
+            # Create it if it doesn't exist
+            mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
+    except Exception as e:
+        # Log the error but continue - will fallback to default experiment
+        print(f"Error ensuring experiment exists: {str(e)}")
+
 
 def start_experiment(experiment_name=MLFLOW_EXPERIMENT_NAME):
     """Start an MLflow experiment."""
