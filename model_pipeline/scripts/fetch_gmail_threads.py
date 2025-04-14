@@ -37,10 +37,9 @@ gcp_logger = gcp_client.logger("gmail_thread_fetcher")
 logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
 
 # Set up MLflow
-configure_mlflow()  # Set tracking URI once
+experiment = configure_mlflow()  # Set tracking URI once
 # Try to set the experiment, fall back to default if it fails
 try:
-    experiment = mlflow.get_experiment_by_name(MLFLOW_EXPERIMENT_NAME)
     if experiment is None:
         # Create it if it doesn't exist
         experiment_id = mlflow.create_experiment(MLFLOW_EXPERIMENT_NAME)
