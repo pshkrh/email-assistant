@@ -4,11 +4,13 @@ import time
 from email.mime.text import MIMEText
 from googleapiclient.discovery import build
 from google.cloud import logging as gcp_logging
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
-    GMAIL_API_CREDENTIALS,
     GMAIL_API_SECRET_ID,
+    GMAIL_API_CREDENTIALS,
 )
 
 if IN_CLOUD_RUN:
@@ -24,15 +26,19 @@ def send_email_notification(error_type, error_message, request_id=None):
     try:
         # Load credentials
         if IN_CLOUD_RUN:
-            get_credentials_from_secret(
-                GCP_PROJECT_ID, GMAIL_API_SECRET_ID, save_to_file=GMAIL_API_CREDENTIALS
+            creds_dict = get_credentials_from_secret(
+                GCP_PROJECT_ID, GMAIL_API_SECRET_ID
             )
+            credentials = Credentials.from_authorized_user_info(creds_dict)
+        else:
+            if not os.path.exists(GMAIL_API_CREDENTIALS):
+                raise FileNotFoundError(
+                    f"Gmail API credentials not found at {GMAIL_API_CREDENTIALS}"
+                )
+            credentials = Credentials.from_authorized_user_file(GMAIL_API_CREDENTIALS)
 
-        creds_file = GMAIL_API_CREDENTIALS
-        if not os.path.exists(creds_file):
-            raise FileNotFoundError(f"Gmail API credentials not found at {creds_file}")
-
-        service = build("gmail", "v1", credentials=creds_file)
+        # Build Gmail service
+        service = build("gmail", "v1", credentials=credentials)
 
         # Email details
         sender = os.getenv(
@@ -77,3 +83,4 @@ def send_email_notification(error_type, error_message, request_id=None):
             },
             severity="ERROR",
         )
+        raise
