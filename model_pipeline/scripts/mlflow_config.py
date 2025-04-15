@@ -6,9 +6,11 @@ from config import MLFLOW_LOG_DIR, MLFLOW_EXPERIMENT_NAME
 def configure_mlflow(log_dir=MLFLOW_LOG_DIR):
     """Configure MLflow with tracking URI."""
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", f"file://{log_dir}")
+    artifact_root = os.getenv("MLFLOW_DEFAULT_ARTIFACT_ROOT", f"file://{log_dir}")
     if tracking_uri.startswith("file://"):
         os.makedirs(log_dir, exist_ok=True)
     mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_artifact_uri(artifact_root)
 
     # Ensure the experiment exists
     try:
