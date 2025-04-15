@@ -15,7 +15,8 @@ WORKDIR /app
 EXPOSE $MLFLOW_PORT
 
 # Use the environment variables from Cloud Run
-CMD exec gunicorn --bind :$MLFLOW_PORT --workers 1 --threads 8 --timeout 0 \
-    --env MLFLOW_BACKEND_STORE_URI=$MLFLOW_BACKEND_STORE_URI \
-    --env MLFLOW_DEFAULT_ARTIFACT_ROOT=$MLFLOW_DEFAULT_ARTIFACT_ROOT \
-    mlflow.server:app
+CMD mlflow server \
+    --backend-store-uri ${MLFLOW_BACKEND_STORE_URI} \
+    --default-artifact-root ${MLFLOW_DEFAULT_ARTIFACT_ROOT} \
+    --host 0.0.0.0 \
+    --port ${MLFLOW_PORT}
