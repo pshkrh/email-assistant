@@ -119,8 +119,10 @@ def fetch_gmail_thread():
     # Start MLflow run for this endpoint
     with mlflow.start_run(
         experiment_id=experiment_id, run_name=f"fetch_gmail_thread_{request_id}"
-    ):
+    ) as run:
         try:
+            artifact_uri = run.info.artifact_uri
+            mlflow.log_dict({"Artifact URI": artifact_uri})
             data = request.get_json()
             required_fields = [
                 "userEmail",
