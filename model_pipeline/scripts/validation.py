@@ -1,19 +1,23 @@
 import spacy
 import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from config import (
-    LABELED_SAMPLE_CSV_PATH,
-    PREDICTED_SAMPLE_CSV_PATH,
-)  # Use paths from config.py
-import mlflow
+from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
 import numpy as np
 from bert_score import score as bert_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
+import mlflow
+from mlflow_config import configure_mlflow
+from transformers import logging as hf_logging
 
-# Load spaCy Named Entity Recognition (NER) Model
+hf_logging.set_verbosity_error()
+
 nlp = spacy.load("en_core_web_sm")
+experiment = configure_mlflow()
+experiment_id = experiment.experiment_id if experiment else None
+bert_invalid_examples = []
+tfidf_invalid_examples = []
 
 negation_phrases = (
     "No",
@@ -29,174 +33,158 @@ negation_phrases = (
 )
 
 
+def is_valid_text(text):
+    return isinstance(text, str) and text.strip().lower() != "nan"
+
+
 def extract_named_entities(text):
-    """Extract named entities (e.g., people, dates, locations, numbers) from text using spaCy."""
+    if not is_valid_text(text):
+        return set()
     doc = nlp(text)
-    return set([ent.text.lower() for ent in doc.ents])  # Return lowercase entities
+    return {ent.text.lower() for ent in doc.ents}
 
 
 def calculate_bert_score(pred_text, true_text):
-    """Compute BERTScore for predicted and true text."""
-    P, R, F1 = bert_score([pred_text], [true_text], lang="en", verbose=False)
-    return F1.item()  # Return the F1 score
+    if (isinstance(true_text, float) and np.isnan(true_text)) and (
+        isinstance(pred_text, float) and np.isnan(pred_text)
+    ):
+        return 1.0
+    if not (is_valid_text(pred_text) and is_valid_text(true_text)):
+        bert_invalid_examples.append({"pred_text": pred_text, "true_text": true_text})
+        mlflow.log_param("bert_skip_invalid_input", True)
+        return 0.0
+    try:
+        P, R, F1 = bert_score([pred_text], [true_text], lang="en", verbose=False)
+        return F1.item()
+    except Exception as e:
+        mlflow.log_param("bert_error", str(e))
+        return 0.0
 
 
 def calculate_tfidf_similarity(pred_text, true_text):
-    """Compute TF-IDF cosine similarity between predicted and true text."""
-    vectorizer = TfidfVectorizer()
-    vectors = vectorizer.fit_transform([pred_text, true_text])
-    similarity = cosine_similarity(vectors[0], vectors[1])[0][0]
-    return similarity
+    if (
+        not (is_valid_text(pred_text) and is_valid_text(true_text))
+        and np.isnan(pred_text)
+        and np.isnan(true_text)
+    ):
+        mlflow.log_param("tfidf_skip_invalid_input", True)
+        tfidf_invalid_examples.append({"pred_text": pred_text, "true_text": true_text})
+        return 1.0
+    try:
+        vectorizer = TfidfVectorizer()
+        vectors = vectorizer.fit_transform([pred_text, true_text])
+        return cosine_similarity(vectors[0], vectors[1])[0][0]
+    except Exception as e:
+        mlflow.log_param("tfidf_error", str(e))
+        return 0.0
 
 
 def calculate_named_entity_overlap(pred_text, true_text):
-    """Calculate Named Entity Overlap Score (NER) between predicted and true text."""
     pred_entities = extract_named_entities(pred_text)
     true_entities = extract_named_entities(true_text)
-
-    if not true_entities:  # If no entities in true label, rely on BERTScore
+    if not true_entities:
         return 1.0
-
-    overlap = len(pred_entities.intersection(true_entities)) / len(true_entities)
-    return overlap  # Score between 0 (no match) and 1 (all entities match)
+    return len(pred_entities.intersection(true_entities)) / len(true_entities)
 
 
 def calculate_action_item_similarity(pred_text, true_text):
-    """Compute final similarity score for action items using Named Entities + BERTScore."""
-    # Define negation phrases, including cases where they start with "- "
+    if not is_valid_text(true_text):
+        return 1.0
     if true_text.lstrip().startswith(negation_phrases):
         return 1.0
     bert_f1 = calculate_bert_score(pred_text, true_text)
     entity_overlap = calculate_named_entity_overlap(pred_text, true_text)
-
-    # Weighted combination: Give more importance to entity overlap (factual correctness)
-    final_score = (0.6 * bert_f1) + (0.4 * entity_overlap)
-    return final_score
+    return (0.6 * bert_f1) + (0.4 * entity_overlap)
 
 
-def validate_outputs(predicted_outputs_df, labeled_output_df, experiment_id):
-    """Compare predicted outputs with labeled data using BERTScore and Named Entity Matching for action items."""
-
+def validate_outputs(predicted_df, labeled_df):
     results = {
-        "summary": defaultdict(list),
-        "action_item": defaultdict(list),
-        "draft_reply": defaultdict(list),
+        task: defaultdict(list) for task in ["summary", "action_item", "draft_reply"]
     }
     true_labels = {
-        "summary": defaultdict(list),
-        "action_item": defaultdict(list),
-        "draft_reply": defaultdict(list),
+        task: defaultdict(list) for task in ["summary", "action_item", "draft_reply"]
     }
 
     matched_count = 0
-    counter = 0
+    skipped = 0
 
-    for _, row in labeled_output_df.iterrows():
+    for _, row in labeled_df.iterrows():
         msg_id = row["Message-ID"]
 
-        if msg_id in predicted_outputs_df["Message-ID"].values:
-            matched_count += 1
-            for task in results.keys():
-                pred = predicted_outputs_df.loc[
-                    predicted_outputs_df["Message-ID"] == msg_id, task
-                ].values[0]
-                true = row[task]
+        if msg_id not in predicted_df["Message-ID"].values:
+            continue
 
-                if task == "action_item":
-                    if true.lstrip().startswith(negation_phrases):
-                        counter += 1
-                        continue
-                    else:
-                        final_score = calculate_action_item_similarity(pred, true)
-                else:
-                    # Compute BERTScore for summaries & draft replies
-                    bert_f1 = calculate_bert_score(pred, true)
-                    tfidf_sim = calculate_tfidf_similarity(pred, true)
-                    final_score = (0.8 * bert_f1) + (
-                        0.2 * tfidf_sim
-                    )  # Weighted similarity
-
-                for threshold in np.arange(0.6, 1.0, 0.05):
-                    results[task][threshold].append(
-                        1 if final_score >= threshold else 0
-                    )
-                    true_labels[task][threshold].append(1)
-
-    print(f"Matched {matched_count} emails for validation.")
-    print(f"Counter - {counter}")
-
-    metrics = {
-        "summary": defaultdict(dict),
-        "action_item": defaultdict(dict),
-        "draft_reply": defaultdict(dict),
-    }
-    with mlflow.start_run(experiment_id=experiment_id, nested=True):
+        matched_count += 1
         for task in results.keys():
+            pred = predicted_df.loc[predicted_df["Message-ID"] == msg_id, task].values[
+                0
+            ]
+            true = row[task]
+
+            if task == "action_item":
+                score = calculate_action_item_similarity(pred, true)
+            else:
+                score = (0.8 * calculate_bert_score(pred, true)) + (
+                    0.2 * calculate_tfidf_similarity(pred, true)
+                )
+
             for threshold in np.arange(0.6, 1.0, 0.05):
-                precision = (
-                    precision_score(
-                        true_labels[task][threshold],
-                        results[task][threshold],
-                        zero_division=0,
-                    )
-                    * 100
-                )
-                recall = (
-                    recall_score(
-                        true_labels[task][threshold],
-                        results[task][threshold],
-                        zero_division=0,
-                    )
-                    * 100
-                )
-                f1 = (
-                    f1_score(
-                        true_labels[task][threshold],
-                        results[task][threshold],
-                        zero_division=0,
-                    )
-                    * 100
-                )
-                accuracy = (
-                    accuracy_score(
-                        true_labels[task][threshold], results[task][threshold]
-                    )
-                    * 100
-                )
+                results[task][threshold].append(1 if score >= threshold else 0)
+                true_labels[task][threshold].append(1)
 
-                metrics[task][threshold] = {
-                    "precision": precision,
-                    "recall": recall,
-                    "f1": f1,
-                    "accuracy": accuracy,
-                }
+    mlflow.log_param("matched_rows", matched_count)
+    mlflow.log_param("skipped_rows", skipped)
 
-                mlflow.log_metric(f"{task}_precision_{threshold}", precision)
-                mlflow.log_metric(f"{task}_recall_{threshold}", recall)
-                mlflow.log_metric(f"{task}_f1_{threshold}", f1)
-                mlflow.log_metric(f"{task}_accuracy_{threshold}", accuracy)
+    metrics = {task: defaultdict(dict) for task in results.keys()}
+    for task in results:
+        for threshold in results[task]:
+            y_pred = results[task][threshold]
+            y_true = true_labels[task][threshold]
+            metrics[task][threshold] = {
+                "precision": precision_score(y_true, y_pred, zero_division=0) * 100,
+                "recall": recall_score(y_true, y_pred, zero_division=0) * 100,
+                "f1": f1_score(y_true, y_pred, zero_division=0) * 100,
+                "accuracy": accuracy_score(y_true, y_pred) * 100,
+            }
 
     return metrics
 
 
 def run_validation(predicted_csv_path, labeled_csv_path):
-    """Run validation and print results."""
-    print(f"Loading predictions from {predicted_csv_path}...")
-    predicted_outputs_df = pd.read_csv(predicted_csv_path)
+    with mlflow.start_run(
+        nested=True, experiment_id=experiment_id, run_name="output_validation"
+    ):
+        mlflow.log_param("predicted_path", predicted_csv_path)
+        mlflow.log_param("labeled_path", labeled_csv_path)
+        predicted_df = pd.read_csv(predicted_csv_path)
+        labeled_df = pd.read_csv(labeled_csv_path)
 
-    print(f"Loading labeled data from {labeled_csv_path}...")
-    labeled_outputs_df = pd.read_csv(labeled_csv_path)
+        print("\n🚀 Starting validation...")
+        metrics = validate_outputs(predicted_df, labeled_df)
 
-    print("Running validation...")
-    metrics = validate_outputs(predicted_outputs_df, labeled_outputs_df)
+        for task in metrics:
+            for threshold, scores in metrics[task].items():
+                print(
+                    f"Threshold {threshold:.2f} => Precision: {scores['precision']:.2f}, Recall: {scores['recall']:.2f}, F1: {scores['f1']:.2f}, Accuracy: {scores['accuracy']:.2f}"
+                )
 
-    for task, thresholds in metrics.items():
-        for threshold, scores in thresholds.items():
-            print(
-                f"{task.capitalize()} - {threshold} - Recall: {scores['recall']:.2f}, Precision: {scores['precision']:.2f}, "
-                f"F1: {scores['f1']:.2f}, Accuracy: {scores['accuracy']:.2f}"
+        mlflow.log_dict(metrics, "task_validation_metrics.json")
+
+        if bert_invalid_examples:
+            mlflow.log_dict(
+                {"bert_skipped_inputs": bert_invalid_examples},
+                "bert_skipped_inputs.json",
             )
-    return metrics
+            mlflow.log_metric("bert_skipped_count", len(bert_invalid_examples))
+
+        if tfidf_invalid_examples:
+            mlflow.log_dict(
+                {"tfidf_skipped_inputs": tfidf_invalid_examples},
+                "tfidf_skipped_inputs.json",
+            )
+            mlflow.log_metric("tfidf_skipped_count", len(tfidf_invalid_examples))
+
+        return metrics
 
 
 if __name__ == "__main__":
