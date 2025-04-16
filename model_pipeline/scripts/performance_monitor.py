@@ -6,7 +6,6 @@ import logging
 from datetime import datetime, timedelta
 from google.cloud import logging as gcp_logging
 from db_connection import get_db_connection
-from load_prompts import load_prompts
 from config import GCP_PROJECT_ID
 from send_notification import send_email_notification
 
@@ -16,192 +15,172 @@ gcp_logger = gcp_client.logger("performance_monitor")
 
 # Thresholds for prompt optimization
 PERFORMANCE_THRESHOLD = 0.7  # 70% positive feedback required
-MIN_FEEDBACK_COUNT = (
-    5  # Minimum number of feedback entries to consider (reduced for demo)
-)
-LOOKBACK_DAYS = 30  # Analyze feedback from the last 30 days (increased for demo)
+MIN_FEEDBACK_COUNT = 5  # Minimum number of feedback entries to consider
+LOOKBACK_DAYS = 30  # Analyze feedback from the last 30 days
 
 
-def calculate_performance_metrics(lookback_days=LOOKBACK_DAYS):
+def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
     """
-    Calculate performance metrics from recent feedback.
-    Returns a dictionary with performance scores for each task.
+    Calculate performance metrics per user for each task.
+    Returns a dictionary with user-specific performance scores.
     """
     try:
-        metrics = {}
+        user_metrics = {}
 
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # For each task type, get feedback metrics
-                for task in ["summary", "action_items", "draft_reply"]:
-                    feedback_column = f"{task}_feedback"
-
-                    # Query to get feedback metrics for the last N days
-                    query = f"""
-                        SELECT 
-                            COUNT(*) as total_count,
-                            SUM(CASE WHEN {feedback_column} = 1 THEN 1 ELSE 0 END) as positive_count,
-                            SUM(CASE WHEN {feedback_column} = 0 THEN 1 ELSE 0 END) as negative_count
-                        FROM user_feedback
-                        WHERE {feedback_column} IS NOT NULL
-                        AND date >= %s
+                # First, get all users who have provided feedback
+                cur.execute(
                     """
+                    SELECT DISTINCT user_email 
+                    FROM user_feedback 
+                    WHERE date >= %s
+                """,
+                    (datetime.now() - timedelta(days=lookback_days),),
+                )
 
-                    cutoff_date = datetime.now() - timedelta(days=lookback_days)
-                    cur.execute(query, (cutoff_date.date(),))
-                    result = cur.fetchone()
+                users = [row["user_email"] for row in cur.fetchall()]
 
-                    # Calculate performance score (percentage of positive feedback)
-                    total_count = result["total_count"] if result else 0
-                    positive_count = result["positive_count"] if result else 0
-                    negative_count = result["negative_count"] if result else 0
+                logging.info(f"Found {len(users)} users with feedback")
 
-                    if total_count >= MIN_FEEDBACK_COUNT:
-                        performance_score = (
-                            positive_count / total_count if total_count > 0 else 0
-                        )
-                    else:
-                        # Not enough feedback to make a determination
-                        performance_score = None
+                for user_email in users:
+                    user_metrics[user_email] = {}
 
-                    metrics[task] = {
-                        "total_feedback": total_count,
-                        "positive_feedback": positive_count,
-                        "negative_feedback": negative_count,
-                        "performance_score": performance_score,
-                        "below_threshold": (
-                            performance_score is not None
-                            and performance_score < PERFORMANCE_THRESHOLD
-                        ),
-                    }
+                    # For each task type, get user-specific feedback metrics
+                    for task in ["summary", "action_items", "draft_reply"]:
+                        feedback_column = f"{task}_feedback"
 
-                    # Get recent trends (last 7 days vs previous 7 days)
-                    if total_count >= MIN_FEEDBACK_COUNT:
-                        # Get data for last 7 days
-                        recent_cutoff = datetime.now() - timedelta(days=7)
-
+                        # Query to get user's feedback metrics
                         query = f"""
                             SELECT 
                                 COUNT(*) as total_count,
-                                SUM(CASE WHEN {feedback_column} = 1 THEN 1 ELSE 0 END) as positive_count
+                                SUM(CASE WHEN {feedback_column} = 1 THEN 1 ELSE 0 END) as positive_count,
+                                SUM(CASE WHEN {feedback_column} = 0 THEN 1 ELSE 0 END) as negative_count
                             FROM user_feedback
                             WHERE {feedback_column} IS NOT NULL
+                            AND user_email = %s
                             AND date >= %s
                         """
 
-                        cur.execute(query, (recent_cutoff.date(),))
-                        recent_result = cur.fetchone()
+                        cutoff_date = datetime.now() - timedelta(days=lookback_days)
+                        cur.execute(query, (user_email, cutoff_date.date()))
+                        result = cur.fetchone()
 
-                        recent_total = (
-                            recent_result["total_count"] if recent_result else 0
-                        )
-                        recent_positive = (
-                            recent_result["positive_count"] if recent_result else 0
-                        )
+                        # Calculate performance score (percentage of positive feedback)
+                        total_count = result["total_count"] if result else 0
+                        positive_count = result["positive_count"] if result else 0
+                        negative_count = result["negative_count"] if result else 0
 
-                        # Get data for previous 7 days
-                        prev_start = datetime.now() - timedelta(days=14)
-                        prev_end = datetime.now() - timedelta(days=7)
+                        if total_count >= MIN_FEEDBACK_COUNT:
+                            performance_score = (
+                                positive_count / total_count if total_count > 0 else 0
+                            )
+                        else:
+                            # Not enough feedback to make a determination
+                            performance_score = None
 
-                        query = f"""
-                            SELECT 
-                                COUNT(*) as total_count,
-                                SUM(CASE WHEN {feedback_column} = 1 THEN 1 ELSE 0 END) as positive_count
-                            FROM user_feedback
-                            WHERE {feedback_column} IS NOT NULL
-                            AND date >= %s AND date < %s
-                        """
-
-                        cur.execute(query, (prev_start.date(), prev_end.date()))
-                        prev_result = cur.fetchone()
-
-                        prev_total = prev_result["total_count"] if prev_result else 0
-                        prev_positive = (
-                            prev_result["positive_count"] if prev_result else 0
-                        )
-
-                        # Calculate trend
-                        recent_score = (
-                            recent_positive / recent_total if recent_total > 0 else 0
-                        )
-                        prev_score = prev_positive / prev_total if prev_total > 0 else 0
-
-                        trend = (
-                            recent_score - prev_score
-                            if prev_total >= MIN_FEEDBACK_COUNT
-                            else None
-                        )
-
-                        metrics[task]["recent_score"] = recent_score
-                        metrics[task]["previous_score"] = prev_score
-                        metrics[task]["trend"] = trend
-                        metrics[task]["trend_direction"] = (
-                            "improving"
-                            if trend and trend > 0.05
-                            else "declining" if trend and trend < -0.05 else "stable"
-                        )
-
-                    # Log to GCP
-                    gcp_logger.log_struct(
-                        {
-                            "message": f"Performance metrics calculated for {task}",
-                            "task": task,
+                        user_metrics[user_email][task] = {
                             "total_feedback": total_count,
                             "positive_feedback": positive_count,
+                            "negative_feedback": negative_count,
                             "performance_score": performance_score,
-                            "below_threshold": metrics[task]["below_threshold"],
-                            "lookback_days": lookback_days,
-                        },
-                        severity="INFO",
-                    )
+                            "below_threshold": (
+                                performance_score is not None
+                                and performance_score < PERFORMANCE_THRESHOLD
+                            ),
+                        }
 
-        return metrics
+                        # Log info about metrics - FIXED to handle None values
+                        score_str = (
+                            f"{performance_score:.2f}"
+                            if performance_score is not None
+                            else "None"
+                        )
+                        logging.info(
+                            f"User {user_email} task {task}: "
+                            f"score={score_str}, "
+                            f"total={total_count}, positive={positive_count}, "
+                            f"below_threshold={user_metrics[user_email][task]['below_threshold']}"
+                        )
+
+                        # Log to GCP
+                        gcp_logger.log_struct(
+                            {
+                                "message": f"User performance metrics calculated for {user_email} on {task}",
+                                "user_email": user_email,
+                                "task": task,
+                                "total_feedback": total_count,
+                                "positive_feedback": positive_count,
+                                "performance_score": performance_score,
+                                "below_threshold": user_metrics[user_email][task][
+                                    "below_threshold"
+                                ],
+                                "lookback_days": lookback_days,
+                            },
+                            severity="INFO",
+                        )
+
+        return user_metrics
 
     except Exception as e:
-        error_msg = f"Error calculating performance metrics: {str(e)}"
+        error_msg = f"Error calculating user performance metrics: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
+        logging.exception(e)  # Log full traceback
         return None
 
 
-def get_current_prompt_strategies():
+def get_user_prompt_strategies(user_email):
     """
-    Retrieve the current prompt strategies for each task type.
-    Returns a dictionary mapping task types to their current strategy.
+    Retrieve the user-specific prompt strategies from the user_prompt_strategies table.
+    Falls back to default strategies if no user-specific settings are found.
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Get the latest prompt strategies used
+                # Get the user-specific prompt strategies
                 query = """
                     SELECT 
-                        prompt_strategy_summary as summary,
-                        prompt_strategy_action_items as action_items,
-                        prompt_strategy_draft_reply as draft_reply
-                    FROM user_feedback
-                    ORDER BY id DESC
-                    LIMIT 1
+                        summary_strategy,
+                        action_items_strategy,
+                        draft_reply_strategy
+                    FROM user_prompt_strategies
+                    WHERE user_email = %s
                 """
-                cur.execute(query)
+                cur.execute(query, (user_email,))
                 result = cur.fetchone()
 
                 if not result:
-                    # Default to "default" strategy if no records found
-                    return {
+                    # Fall back to default strategies if no user-specific settings
+                    default_strategies = {
                         "summary": "default",
                         "action_items": "default",
                         "draft_reply": "default",
                     }
+                    logging.info(
+                        f"No strategies found for {user_email}, using defaults"
+                    )
+                    gcp_logger.log_struct(
+                        {
+                            "message": f"No user-specific strategies for {user_email}, using default",
+                            "user_email": user_email,
+                            "strategies": default_strategies,
+                        },
+                        severity="DEBUG",
+                    )
+                    return default_strategies
 
                 strategies = {
-                    "summary": result["summary"] or "default",
-                    "action_items": result["action_items"] or "default",
-                    "draft_reply": result["draft_reply"] or "default",
+                    "summary": result["summary_strategy"] or "default",
+                    "action_items": result["action_items_strategy"] or "default",
+                    "draft_reply": result["draft_reply_strategy"] or "default",
                 }
 
+                logging.info(f"Retrieved strategies for {user_email}: {strategies}")
                 gcp_logger.log_struct(
                     {
-                        "message": "Retrieved current prompt strategies",
+                        "message": f"Retrieved user-specific prompt strategies for {user_email}",
+                        "user_email": user_email,
                         "strategies": strategies,
                     },
                     severity="DEBUG",
@@ -210,9 +189,11 @@ def get_current_prompt_strategies():
                 return strategies
 
     except Exception as e:
-        error_msg = f"Error retrieving current prompt strategies: {str(e)}"
+        error_msg = f"Error retrieving user prompt strategies: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
+        logging.exception(e)  # Log full traceback
+        # Fall back to default strategies
         return {
             "summary": "default",
             "action_items": "default",
@@ -220,65 +201,134 @@ def get_current_prompt_strategies():
         }
 
 
-def update_prompt_strategy(task, new_strategy):
+def update_prompt_strategy(task, new_strategy, user_email):
     """
-    Update the prompt strategy configuration for a task.
+    Update the prompt strategy configuration for a user-specific task.
 
     Args:
         task (str): The task type (summary, action_items, draft_reply)
         new_strategy (str): The new strategy to use (default, alternate)
+        user_email (str): User email for user-specific strategy
 
     Returns:
         dict: Result of the operation
     """
     try:
+        logging.info(
+            f"Updating prompt strategy for {user_email} on {task} to {new_strategy}"
+        )
+        if not user_email:
+            error_msg = "User email is required for strategy updates"
+            gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
+            logging.error(error_msg)
+            return {"success": False, "message": error_msg}
+
         # Map task names to database column names
         column_mapping = {
-            "summary": "prompt_strategy_summary",
-            "action_items": "prompt_strategy_action_items",
-            "draft_reply": "prompt_strategy_draft_reply",
+            "summary": "summary_strategy",
+            "action_items": "action_items_strategy",
+            "draft_reply": "draft_reply_strategy",
         }
 
         if task not in column_mapping:
             error_msg = f"Invalid task type: {task}"
             gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
+            logging.error(error_msg)
             return {"success": False, "message": error_msg}
 
-        # Create a change record in our prompt_strategy_changes table
+        db_column = column_mapping[task]
+
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # First, insert a record into the prompt_strategy_changes table
-                query = """
-                    INSERT INTO prompt_strategy_changes (
-                        task, old_strategy, new_strategy, change_reason, timestamp
-                    ) VALUES (%s, %s, %s, %s, %s)
-                    RETURNING id
-                """
-
                 # Get current strategy first
-                current_strategies = get_current_prompt_strategies()
+                current_strategies = get_user_prompt_strategies(user_email)
                 old_strategy = current_strategies.get(task, "default")
 
+                # First check if user exists in user_prompt_strategies table
+                cur.execute(
+                    "SELECT COUNT(*) as count FROM user_prompt_strategies WHERE user_email = %s",
+                    (user_email,),
+                )
+                user_exists = cur.fetchone()["count"] > 0
+                logging.info(
+                    f"User {user_email} exists in strategies table: {user_exists}"
+                )
+
+                if user_exists:
+                    # Update existing user strategy
+                    query = f"""
+                        UPDATE user_prompt_strategies 
+                        SET {db_column} = %s,
+                        last_updated = %s
+                        WHERE user_email = %s
+                    """
+                    logging.info(f"Executing update query: {query}")
+                    cur.execute(query, (new_strategy, datetime.now(), user_email))
+                    logging.info(f"Updated {cur.rowcount} rows")
+                else:
+                    # Insert new user strategy record
+                    summary_strategy = new_strategy if task == "summary" else "default"
+                    action_items_strategy = (
+                        new_strategy if task == "action_items" else "default"
+                    )
+                    draft_reply_strategy = (
+                        new_strategy if task == "draft_reply" else "default"
+                    )
+
+                    query = """
+                        INSERT INTO user_prompt_strategies (
+                            user_email, summary_strategy, action_items_strategy, 
+                            draft_reply_strategy, last_updated
+                        ) VALUES (%s, %s, %s, %s, %s)
+                    """
+                    logging.info(f"Executing insert query: {query}")
+                    cur.execute(
+                        query,
+                        (
+                            user_email,
+                            summary_strategy,
+                            action_items_strategy,
+                            draft_reply_strategy,
+                            datetime.now(),
+                        ),
+                    )
+                    logging.info(f"Inserted {cur.rowcount} rows")
+
+                change_reason = f"User performance below threshold for {task}"
+
+                # Create a change record in our prompt_strategy_changes table
+                query = """
+                    INSERT INTO prompt_strategy_changes (
+                        task, old_strategy, new_strategy, change_reason, 
+                        timestamp, user_email
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """
+                logging.info(f"Executing change record insertion: {query}")
                 cur.execute(
                     query,
                     (
                         task,
                         old_strategy,
                         new_strategy,
-                        "Performance below threshold",
+                        change_reason,
                         datetime.now(),
+                        user_email,
                     ),
                 )
 
                 change_id = cur.fetchone()["id"]
+                logging.info(f"Created change record with ID: {change_id}")
                 conn.commit()
+                logging.info("Transaction committed")
 
         gcp_logger.log_struct(
             {
-                "message": f"Updated prompt strategy for {task}",
+                "message": f"Updated user-specific prompt strategy for {user_email} on {task}",
                 "task": task,
                 "old_strategy": old_strategy,
                 "new_strategy": new_strategy,
+                "user_email": user_email,
                 "change_id": change_id,
             },
             severity="INFO",
@@ -286,7 +336,7 @@ def update_prompt_strategy(task, new_strategy):
 
         return {
             "success": True,
-            "message": f"Updated prompt strategy for {task} from {old_strategy} to {new_strategy}",
+            "message": f"Updated user-specific prompt strategy for {user_email} on {task} from {old_strategy} to {new_strategy}",
             "change_id": change_id,
         }
 
@@ -294,15 +344,17 @@ def update_prompt_strategy(task, new_strategy):
         error_msg = f"Error updating prompt strategy for {task}: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
+        logging.exception(e)  # Log full traceback
         return {"success": False, "message": error_msg}
 
 
-def optimize_prompt_strategies(metrics=None, experiment_id=None):
+def optimize_user_prompt_strategies(user_metrics=None, experiment_id=None):
     """
-    Analyze performance metrics and optimize prompt strategies where needed.
+    Analyze user performance metrics and optimize prompt strategies where needed.
+    Only focuses on user-specific optimizations.
 
     Args:
-        metrics (dict, optional): Performance metrics. If None, calculates them.
+        user_metrics (dict, optional): User-specific metrics. If None, calculates them.
         experiment_id (str, optional): MLflow experiment ID for logging.
 
     Returns:
@@ -310,97 +362,160 @@ def optimize_prompt_strategies(metrics=None, experiment_id=None):
     """
     request_id = str(uuid.uuid4())
     start_time = time.time()
+    logging.info(f"Starting user prompt optimization (request ID: {request_id})")
 
     # Use MLflow if an experiment ID is provided
     if experiment_id:
         with mlflow.start_run(
             experiment_id=experiment_id, run_name=f"optimize_prompts_{request_id}"
         ):
-            return _run_optimization(metrics, request_id, experiment_id)
+            return _run_optimization(user_metrics, request_id, experiment_id)
     else:
-        return _run_optimization(metrics, request_id)
+        return _run_optimization(user_metrics, request_id)
 
 
-def _run_optimization(metrics=None, request_id=None, experiment_id=None):
+def _run_optimization(user_metrics=None, request_id=None, experiment_id=None):
     """Internal function to run the optimization process."""
     try:
-        # Calculate metrics if not provided
-        if metrics is None:
-            metrics = calculate_performance_metrics()
+        # Calculate user metrics if not provided
+        if user_metrics is None:
+            logging.info("No metrics provided, calculating user metrics")
+            user_metrics = calculate_user_performance_metrics()
 
-        if metrics is None:
-            error_msg = "Failed to calculate performance metrics"
+        if not user_metrics:
+            error_msg = "Failed to calculate user performance metrics or no users found"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
             )
+            logging.error(error_msg)
             return {"success": False, "message": error_msg}
+
+        logging.info(f"Found metrics for {len(user_metrics)} users")
 
         # Log metrics to MLflow if available
         if experiment_id:
-            for task, task_metrics in metrics.items():
-                if task_metrics["performance_score"] is not None:
-                    mlflow.log_metric(
-                        f"{task}_performance_score", task_metrics["performance_score"]
-                    )
-
-        # Get current strategies
-        current_strategies = get_current_prompt_strategies()
+            for user_email, user_task_metrics in user_metrics.items():
+                for task, task_metrics in user_task_metrics.items():
+                    if task_metrics["performance_score"] is not None:
+                        mlflow.log_metric(
+                            f"{user_email}_{task}_score",
+                            task_metrics["performance_score"],
+                        )
 
         # Track changes
-        changes_made = []
-        tasks_below_threshold = []
+        user_changes = []
+        users_below_threshold = {}
 
-        # Check each task and optimize if needed
-        for task, task_metrics in metrics.items():
-            if task_metrics["below_threshold"]:
-                tasks_below_threshold.append(task)
+        # Check user-specific metrics and optimize if needed
+        for user_email, user_task_metrics in user_metrics.items():
+            users_below_threshold[user_email] = []
+            logging.info(f"Processing user: {user_email}")
 
-                # Only change strategy if we're not already using alternate
-                current_strategy = current_strategies.get(task, "default")
+            # Get current user strategies
+            user_strategies = get_user_prompt_strategies(user_email)
 
-                if current_strategy == "default":
-                    # Switch to alternate strategy
-                    result = update_prompt_strategy(task, "alternate")
-                    changes_made.append(
-                        {
-                            "task": task,
-                            "old_strategy": current_strategy,
-                            "new_strategy": "alternate",
-                            "performance_score": task_metrics["performance_score"],
-                            "change_id": (
-                                result.get("change_id") if result["success"] else None
-                            ),
-                        }
+            # Log the user strategies
+            logging.info(f"Current strategies for {user_email}: {user_strategies}")
+
+            for task, metrics in user_task_metrics.items():
+                # Check if the performance score is available and below threshold
+                if metrics.get("performance_score") is not None and metrics.get(
+                    "below_threshold", False
+                ):
+                    users_below_threshold[user_email].append(task)
+                    logging.info(f"User {user_email} task {task} is below threshold")
+
+                    # Only change if we're not already using alternate
+                    current_strategy = user_strategies.get(task, "default")
+
+                    logging.info(
+                        f"Current strategy for {user_email} on {task}: {current_strategy}"
                     )
 
-                    gcp_logger.log_struct(
-                        {
-                            "message": f"Optimized prompt for {task}: switching to alternate strategy",
-                            "request_id": request_id,
-                            "task": task,
-                            "performance_score": task_metrics["performance_score"],
-                            "threshold": PERFORMANCE_THRESHOLD,
-                        },
-                        severity="INFO",
-                    )
-                else:
-                    # Already using alternate strategy
-                    gcp_logger.log_struct(
-                        {
-                            "message": f"Task {task} below threshold but already using alternate strategy",
-                            "request_id": request_id,
-                            "task": task,
-                            "performance_score": task_metrics["performance_score"],
-                            "current_strategy": current_strategy,
-                        },
-                        severity="INFO",
-                    )
+                    if current_strategy == "default":
+                        # Switch to alternate strategy for this user
+                        logging.info(
+                            f"Updating strategy for {user_email} on {task} to alternate"
+                        )
+                        result = update_prompt_strategy(task, "alternate", user_email)
 
-        # Send notification if any tasks were below threshold
-        if tasks_below_threshold:
-            notification_message = (
-                f"Performance below threshold for tasks: {', '.join(tasks_below_threshold)}. "
-                f"Prompt strategies updated for: {', '.join([c['task'] for c in changes_made])}"
+                        logging.info(f"Update result: {result}")
+
+                        if result.get("success", False):
+                            user_changes.append(
+                                {
+                                    "user_email": user_email,
+                                    "task": task,
+                                    "old_strategy": current_strategy,
+                                    "new_strategy": "alternate",
+                                    "performance_score": metrics.get(
+                                        "performance_score"
+                                    ),
+                                    "change_id": result.get("change_id"),
+                                }
+                            )
+
+                            gcp_logger.log_struct(
+                                {
+                                    "message": f"Successfully optimized user-specific prompt for {user_email} on {task}",
+                                    "request_id": request_id,
+                                    "user_email": user_email,
+                                    "task": task,
+                                    "performance_score": metrics.get(
+                                        "performance_score"
+                                    ),
+                                    "threshold": PERFORMANCE_THRESHOLD,
+                                },
+                                severity="INFO",
+                            )
+                        else:
+                            logging.error(
+                                f"Failed to update strategy: {result.get('message')}"
+                            )
+                            gcp_logger.log_struct(
+                                {
+                                    "message": f"Failed to update strategy for {user_email} on {task}: {result.get('message')}",
+                                    "request_id": request_id,
+                                    "user_email": user_email,
+                                    "task": task,
+                                },
+                                severity="ERROR",
+                            )
+                    else:
+                        # Already using alternate strategy
+                        logging.info(
+                            f"User {user_email} task {task} already using {current_strategy}"
+                        )
+                        gcp_logger.log_struct(
+                            {
+                                "message": f"User {user_email} task {task} below threshold but already using alternate strategy",
+                                "request_id": request_id,
+                                "user_email": user_email,
+                                "task": task,
+                                "performance_score": metrics.get("performance_score"),
+                                "current_strategy": current_strategy,
+                            },
+                            severity="INFO",
+                        )
+
+            # Clean up empty task lists
+            if not users_below_threshold[user_email]:
+                logging.info(
+                    f"No tasks below threshold for {user_email}, removing from report"
+                )
+                del users_below_threshold[user_email]
+
+        # Send notification if any users had tasks below threshold
+        if users_below_threshold:
+            notification_message = []
+
+            user_notifications = []
+            for user, tasks in users_below_threshold.items():
+                user_notifications.append(f"{user}: {', '.join(tasks)}")
+
+            notification_message.append(
+                f"User-specific performance below threshold for: {'; '.join(user_notifications)}. "
+                f"User-specific prompt strategies updated for {len(user_changes)} cases."
             )
 
             # Log notification message
@@ -408,7 +523,7 @@ def _run_optimization(metrics=None, request_id=None, experiment_id=None):
                 {
                     "message": "Sending performance notification",
                     "request_id": request_id,
-                    "notification": notification_message,
+                    "notification": "\n".join(notification_message),
                 },
                 severity="INFO",
             )
@@ -416,16 +531,17 @@ def _run_optimization(metrics=None, request_id=None, experiment_id=None):
             # In a production system, you would uncomment this to send actual email notifications
             # send_email_notification(
             #     "Performance Alert",
-            #     notification_message,
+            #     "\n".join(notification_message),
             #     request_id
             # )
 
         # Log result
+        logging.info(f"Optimization completed with {len(user_changes)} changes")
         result = {
             "success": True,
-            "metrics": metrics,
-            "tasks_below_threshold": tasks_below_threshold,
-            "changes_made": changes_made,
+            "user_metrics": user_metrics,
+            "users_below_threshold": users_below_threshold,
+            "user_changes": user_changes,
             "timestamp": datetime.now().isoformat(),
         }
 
@@ -437,9 +553,11 @@ def _run_optimization(metrics=None, request_id=None, experiment_id=None):
     except Exception as e:
         error_msg = f"Error in prompt optimization: {str(e)}"
         gcp_logger.log_struct(
-            {"message": error_msg, "request_id": request_id}, severity="ERROR"
+            {"message": error_msg, "request_id": request_id},
+            severity="ERROR",
         )
         logging.error(error_msg)
+        logging.exception(e)  # Log full traceback
 
         if experiment_id:
             mlflow.log_param("error", str(e))
@@ -449,6 +567,11 @@ def _run_optimization(metrics=None, request_id=None, experiment_id=None):
 
 # If run directly, execute the optimization process
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    result = optimize_prompt_strategies()
-    print(result)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()],
+    )
+    logging.info("Starting optimization process")
+    result = optimize_user_prompt_strategies()
+    logging.info(f"Optimization result: {result}")
