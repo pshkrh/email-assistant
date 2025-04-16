@@ -16,6 +16,7 @@ from output_verifier import verify_all_outputs
 from save_to_database import save_to_db
 from update_database import update_user_feedback
 from db_helpers import get_existing_user_feedback, get_last_3_feedbacks
+from db_connection import get_db_connection
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
@@ -25,6 +26,9 @@ from config import (
 from mlflow_config import configure_mlflow
 from config import MLFLOW_EXPERIMENT_NAME
 from send_notification import send_email_notification
+from monitoring_api import (
+    register_monitoring_endpoints,
+)
 
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
@@ -61,6 +65,55 @@ def setup_mlflow():
             severity="WARNING",
         )
         return experiment_id
+
+
+def get_global_recommended_strategies():
+    """
+    Retrieve the most recent global recommended strategies from the prompt_strategy_changes table.
+    Returns a dictionary mapping task types to their recommended strategies.
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # For each task type, get the most recent recommended strategy
+                strategies = {}
+
+                for task in ["summary", "action_items", "draft_reply"]:
+                    query = """
+                        SELECT new_strategy
+                        FROM prompt_strategy_changes
+                        WHERE task = %s
+                        ORDER BY timestamp DESC
+                        LIMIT 1
+                    """
+
+                    cur.execute(query, (task,))
+                    result = cur.fetchone()
+
+                    if result:
+                        strategies[task] = result["new_strategy"]
+                    else:
+                        strategies[task] = "default"
+
+                gcp_logger.log_struct(
+                    {
+                        "message": "Retrieved global recommended strategies",
+                        "strategies": strategies,
+                    },
+                    severity="DEBUG",
+                )
+
+                return strategies
+
+    except Exception as e:
+        error_msg = f"Error retrieving global recommended strategies: {str(e)}"
+        gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
+        logging.error(error_msg)
+        return {
+            "summary": "default",
+            "action_items": "default",
+            "draft_reply": "default",
+        }
 
 
 app.logger.handlers = []
@@ -217,7 +270,18 @@ def fetch_gmail_thread():
                         continue
                 task_regen_needed[task] = True
 
-            # Determine prompt strategy based on feedback
+            # Get global recommended strategies from the monitoring system
+            global_strategies = get_global_recommended_strategies()
+            gcp_logger.log_struct(
+                {
+                    "message": "Global recommended strategies",
+                    "request_id": request_id,
+                    "strategies": global_strategies,
+                },
+                severity="DEBUG",
+            )
+
+            # Determine prompt strategy based on both user feedback and global recommendations
             for task in requested_tasks:
                 if not task_regen_needed.get(task):
                     continue
@@ -235,16 +299,39 @@ def fetch_gmail_thread():
                     severity="DEBUG",
                 )
 
+                # TWO-LEVEL APPROACH:
+                # 1. If user has multiple negative feedbacks, use alternate strategy (user-level)
+                # 2. Otherwise, use the globally recommended strategy (global-level)
                 if negative_count >= 2:
+                    # User-level override (user has specific issues with this task)
                     prompt_strategy[task] = "alternate"
                     negative_examples_by_task[task] = [
                         (f[0], f[1]) for f in recent_feedbacks if f[2] == 0
                     ]
+                    gcp_logger.log_struct(
+                        {
+                            "message": f"Using alternate strategy for task {task} due to user-specific feedback",
+                            "request_id": request_id,
+                        },
+                        severity="INFO",
+                    )
                 else:
-                    prompt_strategy[task] = "default"
+                    # Fall back to global recommendation
+                    prompt_strategy[task] = global_strategies.get(task, "default")
                     negative_examples_by_task[task] = []
+                    gcp_logger.log_struct(
+                        {
+                            "message": f"Using globally recommended strategy for task {task}: {prompt_strategy[task]}",
+                            "request_id": request_id,
+                        },
+                        severity="INFO",
+                    )
 
                 mlflow.log_param(f"{task}_prompt_strategy", prompt_strategy[task])
+                mlflow.log_param(
+                    f"{task}_strategy_source",
+                    "user-specific" if negative_count >= 2 else "global",
+                )
 
             # Process tasks requiring regeneration
             for task in requested_tasks:
@@ -356,12 +443,27 @@ def fetch_gmail_thread():
                 send_email_notification("Database Save Failure", error_msg, request_id)
                 return jsonify({"error": error_msg}), 500
 
+            # Add strategy source information to the response
+            strategy_sources = {}
+            for task in requested_tasks:
+                if task_regen_needed.get(task, False):
+                    recent_feedbacks = get_last_3_feedbacks(
+                        email, f"{task}_feedback", task
+                    )
+                    negative_count = sum(1 for f in recent_feedbacks if f[2] == 0)
+                    strategy_sources[task] = (
+                        "user-specific" if negative_count >= 2 else "global"
+                    )
+                else:
+                    strategy_sources[task] = "reused"
+
             response = {
                 "threadId": thread_id,
                 "userEmail": email,
                 "docId": table_docid,
                 "result": results,
                 "promptStrategy": prompt_strategy,
+                "strategySource": strategy_sources,  # NEW: Added to response
             }
 
             # Log response and duration
@@ -497,6 +599,10 @@ def store_feedback():
             mlflow.log_param("server_error", str(e))
             send_email_notification("Server Error", error_msg, request_id)
             return jsonify({"error": error_msg}), 500
+
+
+# Register the monitoring endpoints
+register_monitoring_endpoints(app)
 
 
 if __name__ == "__main__":
