@@ -16,6 +16,7 @@ from output_verifier import verify_all_outputs
 from save_to_database import save_to_db
 from update_database import update_user_feedback
 from db_helpers import get_existing_user_feedback, get_last_3_feedbacks
+from db_connection import get_db_connection
 from config import (
     IN_CLOUD_RUN,
     GCP_PROJECT_ID,
@@ -25,6 +26,11 @@ from config import (
 from mlflow_config import configure_mlflow
 from config import MLFLOW_EXPERIMENT_NAME
 from send_notification import send_email_notification
+from monitoring_api import (
+    register_monitoring_endpoints,
+)
+from performance_monitor import get_user_prompt_strategies
+from datetime import datetime
 
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
@@ -61,6 +67,145 @@ def setup_mlflow():
             severity="WARNING",
         )
         return experiment_id
+
+
+def determine_prompt_strategy(email, tasks, request_id=None):
+    """
+    Determine which prompt strategy to use for each task based on:
+    1. User's personal strategy settings (if available)
+    2. User's recent feedback history (if negative)
+
+    Returns a dictionary mapping task types to strategies and the sources of those decisions.
+    """
+    prompt_strategy = {
+        "summary": None,
+        "action_items": None,
+        "draft_reply": None,
+    }
+    strategy_sources = {}
+    negative_examples_by_task = {}
+
+    # Ensure user exists in strategies table
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            # Check if user exists in user_prompt_strategies table
+            cur.execute(
+                "SELECT COUNT(*) as count FROM user_prompt_strategies WHERE user_email = %s",
+                (email,),
+            )
+            user_exists = cur.fetchone()["count"] > 0
+
+            if not user_exists:
+                # Insert new user with default strategies
+                query = """
+                    INSERT INTO user_prompt_strategies (
+                        user_email, summary_strategy, action_items_strategy, 
+                        draft_reply_strategy, last_updated
+                    ) VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (user_email) DO NOTHING
+                """
+                cur.execute(
+                    query,
+                    (
+                        email,
+                        "default",
+                        "default",
+                        "default",
+                        datetime.now(),
+                    ),
+                )
+                conn.commit()
+
+                gcp_logger.log_struct(
+                    {
+                        "message": f"New user added to strategies table: {email}",
+                        "request_id": request_id,
+                        "user_email": email,
+                    },
+                    severity="INFO",
+                )
+
+    # Step 1: Get user-specific strategies from the database
+    user_strategies = None
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            # Get the user-specific prompt strategies directly from database
+            query = """
+                SELECT 
+                    summary_strategy,
+                    action_items_strategy,
+                    draft_reply_strategy
+                FROM user_prompt_strategies
+                WHERE user_email = %s
+            """
+            cur.execute(query, (email,))
+            result = cur.fetchone()
+
+            if result:
+                user_strategies = {
+                    "summary": result["summary_strategy"] or "default",
+                    "action_items": result["action_items_strategy"] or "default",
+                    "draft_reply": result["draft_reply_strategy"] or "default",
+                }
+            else:
+                # Fallback to defaults if no record found (shouldn't happen after the above)
+                user_strategies = {
+                    "summary": "default",
+                    "action_items": "default",
+                    "draft_reply": "default",
+                }
+
+            gcp_logger.log_struct(
+                {
+                    "message": f"Retrieved strategies for {email}",
+                    "request_id": request_id,
+                    "user_email": email,
+                    "strategies": user_strategies,
+                },
+                severity="INFO",
+            )
+
+    # Step 2: Check recent user feedback to potentially override
+    for task in tasks:
+        feedback_column = f"{task}_feedback"
+        recent_feedbacks = get_last_3_feedbacks(email, feedback_column, task)
+        negative_count = sum(1 for f in recent_feedbacks if f[2] == 0)
+
+        # If user has multiple negative feedbacks, use alternate strategy regardless of user settings
+        if negative_count >= 2:
+            prompt_strategy[task] = "alternate"
+            negative_examples_by_task[task] = [
+                (f[0], f[1]) for f in recent_feedbacks if f[2] == 0
+            ]
+            strategy_sources[task] = "recent_feedback"
+
+            gcp_logger.log_struct(
+                {
+                    "message": f"Using alternate strategy for task {task} due to recent negative feedback",
+                    "request_id": request_id,
+                    "user_email": email,
+                    "task": task,
+                    "negative_count": negative_count,
+                },
+                severity="INFO",
+            )
+        else:
+            # Otherwise, use the user's configured strategy
+            prompt_strategy[task] = user_strategies.get(task, "default")
+            negative_examples_by_task[task] = []
+            strategy_sources[task] = "user_configured"
+
+            gcp_logger.log_struct(
+                {
+                    "message": f"Using user-configured strategy for task {task}: {prompt_strategy[task]}",
+                    "request_id": request_id,
+                    "user_email": email,
+                    "task": task,
+                },
+                severity="INFO",
+            )
+
+    return prompt_strategy, strategy_sources, negative_examples_by_task
 
 
 app.logger.handlers = []
@@ -190,12 +335,33 @@ def fetch_gmail_thread():
 
             results = {}
             task_regen_needed = {}
-            prompt_strategy = {
-                "summary": None,
-                "action_items": None,
-                "draft_reply": None,
-            }
-            negative_examples_by_task = {}
+
+            # Determine which prompt strategy to use based on user history and settings
+            prompt_strategy, strategy_sources, negative_examples_by_task = (
+                determine_prompt_strategy(email, requested_tasks, request_id)
+            )
+
+            # Log the strategy determination
+            gcp_logger.log_struct(
+                {
+                    "message": "Determined prompt strategies",
+                    "request_id": request_id,
+                    "user_email": email,
+                    "strategies": prompt_strategy,
+                    "strategy_sources": strategy_sources,
+                },
+                severity="DEBUG",
+            )
+
+            print(
+                {
+                    "message": "Determined prompt strategies",
+                    "request_id": request_id,
+                    "user_email": email,
+                    "strategies": prompt_strategy,
+                    "strategy_sources": strategy_sources,
+                }
+            )
 
             # Determine which tasks need regeneration
             for task in requested_tasks:
@@ -218,35 +384,6 @@ def fetch_gmail_thread():
                         )
                         continue
                 task_regen_needed[task] = True
-
-            # Determine prompt strategy based on feedback
-            for task in requested_tasks:
-                if not task_regen_needed.get(task):
-                    continue
-                feedback_column = f"{task}_feedback"
-                recent_feedbacks = get_last_3_feedbacks(email, feedback_column, task)
-                negative_count = sum(1 for f in recent_feedbacks if f[2] == 0)
-
-                gcp_logger.log_struct(
-                    {
-                        "message": f"Recent feedbacks for task {task}",
-                        "request_id": request_id,
-                        "feedback_count": len(recent_feedbacks),
-                        "negative_count": negative_count,
-                    },
-                    severity="DEBUG",
-                )
-
-                if negative_count >= 2:
-                    prompt_strategy[task] = "alternate"
-                    negative_examples_by_task[task] = [
-                        (f[0], f[1]) for f in recent_feedbacks if f[2] == 0
-                    ]
-                else:
-                    prompt_strategy[task] = "default"
-                    negative_examples_by_task[task] = []
-
-                mlflow.log_param(f"{task}_prompt_strategy", prompt_strategy[task])
 
             # Process tasks requiring regeneration
             for task in requested_tasks:
@@ -364,6 +501,7 @@ def fetch_gmail_thread():
                 "docId": table_docid,
                 "result": results,
                 "promptStrategy": prompt_strategy,
+                "strategySource": strategy_sources,
             }
 
             # Log response and duration
@@ -499,6 +637,10 @@ def store_feedback():
             mlflow.log_param("server_error", str(e))
             send_email_notification("Server Error", error_msg, request_id)
             return jsonify({"error": error_msg}), 500
+
+
+# Register the monitoring endpoints
+register_monitoring_endpoints(app)
 
 
 if __name__ == "__main__":
