@@ -1,5 +1,6 @@
 # model_pipeline/config.py
 import os
+import json
 from get_project_root import project_root
 
 # Project root directory path
@@ -34,9 +35,13 @@ CREDENTIALS_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "credentials")
 os.makedirs(CREDENTIALS_DIR, exist_ok=True)  # Ensure the directory exists
 
 # Secret Manager IDs (for Cloud Run)
-GMAIL_API_SECRET_ID = "gmail-credentials"
-GMAIL_NOTIFICATION_SECRET_ID = "gmail-notification"
-SERVICE_ACCOUNT_SECRET_ID = "service-account-credentials"
+GMAIL_API_SECRET_ID = os.environ.get("GMAIL_API_SECRET_ID", "gmail-credentials")
+GMAIL_NOTIFICATION_SECRET_ID = os.environ.get(
+    "GMAIL_NOTIFICATION_SECRET_ID", "gmail-notification"
+)
+SERVICE_ACCOUNT_SECRET_ID = os.environ.get(
+    "SERVICE_ACCOUNT_SECRET_ID", "service-account-credentials"
+)
 
 # Credential paths
 GMAIL_API_CREDENTIALS = os.path.join(CREDENTIALS_DIR, "MailMateCredential.json")
@@ -47,12 +52,16 @@ SERVICE_ACCOUNT_FILE = os.path.join(CREDENTIALS_DIR, "GoogleCloudCredential.json
 MODEL_ENV_PATH = os.path.join(PROJECT_ROOT, "model_pipeline", ".env")
 
 # Gmail API Configuration
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
-FLASK_PORT = 8000
+GMAIL_SCOPES = json.loads(
+    os.environ.get("GMAIL_SCOPES", '["https://www.googleapis.com/auth/gmail.readonly"]')
+)
+FLASK_PORT = int(os.environ.get("FLASK_PORT", 8000))
 
 # MLflow Configuration
 MLFLOW_LOG_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "logs")
-MLFLOW_EXPERIMENT_NAME = "MailMate_Email_Assistant"
+MLFLOW_EXPERIMENT_NAME = os.environ.get(
+    "MLFLOW_EXPERIMENT_NAME", "MailMate_Email_Assistant"
+)
 
 # DB configurations
 DB_NAME = os.environ.get("DB_NAME", "mail_mate_user_data")
