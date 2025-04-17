@@ -1,4 +1,4 @@
-name: Run Bias + Validation Checks
+name: Sensitivity Analysis
 
 on:
   workflow_dispatch:
@@ -10,6 +10,7 @@ on:
       - "model_pipeline/scripts/sensitivity_analysis.py"
       - "model_pipeline/data/llm_generator_prompts.yaml"
       - "model_pipeline/data/llm_generator_prompts_alternate.yaml"
+      - ".github/workflows/sensitivity_analysis.yml"
 
 jobs:
   notify:

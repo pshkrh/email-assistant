@@ -10,7 +10,7 @@ jinja2
 
 # LLM and Transformers
 transformers
-torch==2.6.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+torch
 
 # VertexAI (if using Google's PaLM or Gemini APIs)
 vertexai
