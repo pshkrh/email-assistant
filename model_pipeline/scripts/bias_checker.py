@@ -324,7 +324,7 @@ def create_fairness_dashboard_with_embedded_images(merged_df, task):
 
         # Get data for this slice
         slice_data = (
-            merged_df.groupby(slice_type)
+            merged_df.groupby(slice_type, group_keys=False)
             .agg(
                 {
                     f"y_true_{task}": "mean",
@@ -337,7 +337,7 @@ def create_fairness_dashboard_with_embedded_images(merged_df, task):
         # If there's scores data, extract BERT F1 scores
         if f"scores_{task}" in merged_df.columns:
             bert_scores = (
-                merged_df.groupby(slice_type)
+                merged_df.groupby(slice_type, group_keys=False)
                 .apply(
                     lambda x: np.mean(
                         [
