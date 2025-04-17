@@ -297,16 +297,16 @@ def create_fairlearn_visualizations(merged_df, task, experiment_id):
         # Calculate and log the disparity metrics
         disparity = {
             "accuracy": metric_frame.difference(
-                method="between_groups", metric="accuracy"
+                method="between_groups", metrics="accuracy"
             ),
             "selection_rate": metric_frame.difference(
-                method="between_groups", metric="selection_rate"
+                method="between_groups", metrics="selection_rate"
             ),
             "false_positive_rate": metric_frame.difference(
-                method="between_groups", metric="false_positive_rate"
+                method="between_groups", metrics="false_positive_rate"
             ),
             "false_negative_rate": metric_frame.difference(
-                method="between_groups", metric="false_negative_rate"
+                method="between_groups", metrics="false_negative_rate"
             ),
         }
 
