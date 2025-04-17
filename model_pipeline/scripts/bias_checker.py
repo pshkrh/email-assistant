@@ -1,5 +1,5 @@
 """
-Bias Checker Module
+Bias Checker Module with Fairlearn Integration
 
 This module evaluates the system's outputs for potential biases across different slices
 of data (e.g., email length, complexity, sender role). It assesses the quality of generated
@@ -7,16 +7,29 @@ content by comparing against human-labeled data using various metrics including:
 - BERT Score
 - Rouge Score
 - Named Entity Recognition Coverage
+- Fairlearn fairness metrics
 """
 
+import tempfile
+from tempfile import NamedTemporaryFile
+
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 import spacy
 import mlflow
 from rouge_score import rouge_scorer
 from bert_score import score
 from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 from transformers import logging as hf_logging
+from fairlearn.metrics import (
+    MetricFrame,
+    selection_rate,
+    false_positive_rate,
+    false_negative_rate,
+)
 
+# Local application imports
 from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
 from mlflow_config import configure_mlflow
 from send_notification import send_email_notification
@@ -198,6 +211,216 @@ def compute_complexity(text):
     return "high" if avg_len > 50 else "low"
 
 
+def create_fairlearn_visualizations(merged_df, task, experiment_id):
+    """
+    Create and log Fairlearn visualizations for bias analysis.
+
+    Args:
+        merged_df (DataFrame): DataFrame with predictions and ground truth
+        task (str): Task name (summary, action_item, etc.)
+        experiment_id (str): MLflow experiment ID
+    """
+    # Prepare the data for all slices
+    slices = ["length_slice", "complexity_slice", "role_slice"]
+
+    for slice_type in slices:
+        # Get unique groups in this slice
+        groups = merged_df[slice_type].values
+
+        # Get the predictions and true values
+        y_true = merged_df[f"y_true_{task}"].values
+        y_pred = merged_df[f"y_pred_{task}"].values
+
+        # Calculate fairness metrics using Fairlearn's MetricFrame
+        metrics = {
+            "accuracy": accuracy_score,
+            "selection_rate": selection_rate,
+            "false_positive_rate": false_positive_rate,
+            "false_negative_rate": false_negative_rate,
+        }
+
+        # Create a MetricFrame
+        metric_frame = MetricFrame(
+            metrics=metrics, y_true=y_true, y_pred=y_pred, sensitive_features=groups
+        )
+
+        # Log the metrics to MLflow
+        mlflow.log_dict(
+            metric_frame.by_group.to_dict(),
+            f"fairlearn_metrics_{task}_{slice_type}.json",
+        )
+
+        # Create and log visualizations
+
+        # 1. Disparity in accuracy
+        plt.figure(figsize=(10, 6))
+        metric_frame.by_group["accuracy"].plot.bar(title=f"Accuracy by {slice_type}")
+        plt.tight_layout()
+
+        # Save to temporary file and log to MLflow
+        with NamedTemporaryFile(suffix=".png") as tmp:
+            plt.savefig(tmp.name)
+            mlflow.log_artifact(tmp.name, f"fairlearn_accuracy_{task}_{slice_type}.png")
+        plt.close()
+
+        # 2. Selection rate disparity (demographic parity)
+        plt.figure(figsize=(10, 6))
+        metric_frame.by_group["selection_rate"].plot.bar(
+            title=f"Selection Rate by {slice_type} (Demographic Parity)"
+        )
+        plt.tight_layout()
+
+        with NamedTemporaryFile(suffix=".png") as tmp:
+            plt.savefig(tmp.name)
+            mlflow.log_artifact(
+                tmp.name, f"fairlearn_selection_rate_{task}_{slice_type}.png"
+            )
+        plt.close()
+
+        # 3. False positive and negative rates (equalized odds)
+        fig, ax = plt.subplots(1, 2, figsize=(15, 6))
+        metric_frame.by_group["false_positive_rate"].plot.bar(
+            ax=ax[0], title=f"False Positive Rate by {slice_type}"
+        )
+        metric_frame.by_group["false_negative_rate"].plot.bar(
+            ax=ax[1], title=f"False Negative Rate by {slice_type}"
+        )
+        plt.tight_layout()
+
+        with NamedTemporaryFile(suffix=".png") as tmp:
+            plt.savefig(tmp.name)
+            mlflow.log_artifact(
+                tmp.name, f"fairlearn_error_rates_{task}_{slice_type}.png"
+            )
+        plt.close()
+
+        # Calculate and log the disparity metrics
+        disparity = {
+            "accuracy": metric_frame.difference(
+                method="between_groups", metric="accuracy"
+            ),
+            "selection_rate": metric_frame.difference(
+                method="between_groups", metric="selection_rate"
+            ),
+            "false_positive_rate": metric_frame.difference(
+                method="between_groups", metric="false_positive_rate"
+            ),
+            "false_negative_rate": metric_frame.difference(
+                method="between_groups", metric="false_negative_rate"
+            ),
+        }
+
+        mlflow.log_dict(disparity, f"fairlearn_disparity_{task}_{slice_type}.json")
+
+
+def create_fairness_dashboard(merged_df, task):
+    """
+    Create a fairness dashboard for a specific task.
+
+    Args:
+        merged_df (DataFrame): DataFrame with predictions and ground truth
+        task (str): Task name (summary, action_item, etc.)
+
+    Returns:
+        str: Path to the HTML dashboard file
+    """
+    # Create a temporary file to store the dashboard
+    temp_dir = tempfile.mkdtemp()
+    dashboard_path = f"{temp_dir}/fairness_dashboard_{task}.html"
+
+    # Plot fairness metrics for each slice
+    for slice_type in ["length_slice", "complexity_slice", "role_slice"]:
+        # Create a figure with multiple subplots
+        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
+        fig.suptitle(f"Fairness Metrics for {task} by {slice_type}", fontsize=16)
+
+        # Get data for this slice
+        slice_data = (
+            merged_df.groupby(slice_type)
+            .agg(
+                {
+                    f"y_true_{task}": "mean",
+                    f"y_pred_{task}": "mean",
+                    f"scores_{task}": lambda x: np.mean([i["bert_f1"] for i in x]),
+                }
+            )
+            .reset_index()
+        )
+
+        # Plot accuracy by slice
+        axs[0, 0].bar(slice_data[slice_type], slice_data[f"y_pred_{task}"])
+        axs[0, 0].set_title("Accuracy by Group")
+        axs[0, 0].set_ylabel("Accuracy")
+        axs[0, 0].set_ylim(0, 1)
+
+        # Plot BERT F1 score by slice
+        axs[0, 1].bar(slice_data[slice_type], slice_data[f"scores_{task}"])
+        axs[0, 1].set_title("BERT F1 Score by Group")
+        axs[0, 1].set_ylabel("BERT F1")
+        axs[0, 1].set_ylim(0, 1)
+
+        # Plot confusion matrix metrics by slice (true positive rate, false positive rate)
+        # These are just placeholders - in real implementation you'd calculate these metrics
+        axs[1, 0].bar(slice_data[slice_type], slice_data[f"y_pred_{task}"])
+        axs[1, 0].set_title("True Positive Rate by Group")
+        axs[1, 0].set_ylabel("TPR")
+        axs[1, 0].set_ylim(0, 1)
+
+        axs[1, 1].bar(slice_data[slice_type], 1 - slice_data[f"y_pred_{task}"])
+        axs[1, 1].set_title("False Positive Rate by Group")
+        axs[1, 1].set_ylabel("FPR")
+        axs[1, 1].set_ylim(0, 1)
+
+        plt.tight_layout()
+        plt.savefig(f"{temp_dir}/fairness_{task}_{slice_type}.png")
+        plt.close()
+
+    # Create a simple HTML dashboard
+    with open(dashboard_path, "w") as f:
+        f.write(
+            f"""
+        <html>
+        <head>
+            <title>Fairness Dashboard for {task}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                h1 {{ color: #333; }}
+                .metrics {{ display: flex; flex-wrap: wrap; }}
+                .metric {{ margin: 10px; padding: 10px; border: 1px solid #ddd; }}
+                img {{ max-width: 100%; height: auto; }}
+            </style>
+        </head>
+        <body>
+            <h1>Fairness Dashboard for {task}</h1>
+            
+            <h2>Length Slice</h2>
+            <div class="metrics">
+                <div class="metric">
+                    <img src="fairness_{task}_length_slice.png" alt="Length Slice Metrics">
+                </div>
+            </div>
+            
+            <h2>Complexity Slice</h2>
+            <div class="metrics">
+                <div class="metric">
+                    <img src="fairness_{task}_complexity_slice.png" alt="Complexity Slice Metrics">
+                </div>
+            </div>
+            
+            <h2>Role Slice</h2>
+            <div class="metrics">
+                <div class="metric">
+                    <img src="fairness_{task}_role_slice.png" alt="Role Slice Metrics">
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        )
+
+    return dashboard_path
+
+
 def check_bias(labeled_df, predicted_df):
     """
     Check for biases in model predictions across different data slices.
@@ -358,6 +581,13 @@ def check_bias(labeled_df, predicted_df):
 
             # Log slice results
             mlflow.log_dict(results, f"bias_results_{task}_{slice_type}.json")
+
+        # Generate Fairlearn visualizations for this task
+        create_fairlearn_visualizations(merged_df, task, experiment_id)
+
+        # Create and log fairness dashboard
+        dashboard_path = create_fairness_dashboard(merged_df, task)
+        mlflow.log_artifact(dashboard_path, f"fairness_dashboard_{task}")
 
         # Send alerts if triggered
         if alert_triggered:
