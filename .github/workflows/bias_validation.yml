@@ -32,6 +32,10 @@ jobs:
         run: |
           pip install --upgrade --prefer-binary -r model_pipeline/bias_validation_requirements.txt
 
+      - name: Download SpaCy model
+        run: |
+          python -m spacy download en_core_web_sm
+
       - name: Run Validation
         run: |
           python model_pipeline/scripts/validation.py

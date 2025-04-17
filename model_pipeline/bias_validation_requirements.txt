@@ -7,6 +7,8 @@ spacy==3.8.3
 nltk
 rouge-score
 bert-score
+torch==2.1.0+cpu 
+-f https://download.pytorch.org/whl/torch_stable.html
 
 # Evaluation metrics
 scikit-learn
