@@ -48,12 +48,13 @@ jobs:
           echo "$GCP_DVC_SA_KEY_JSON" > gcp-dvc-sa.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${PWD}/gcp-dvc-sa.json" >> $GITHUB_ENV
 
-      - name: Pull data from DVC (GCS)
+      - name: Install DVC (GCS)
         run: |
           pip install dvc[gs]
 
       - name: Configure DVC remote
         run: |
+          dvc init
           dvc remote add -d mail_mate gs://mail_mate || echo "Remote already exists"
           dvc remote modify mail_mate credentialpath gcp-dvc-sa.json
 
