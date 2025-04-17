@@ -39,15 +39,8 @@ def send_email_notification(error_type, error_message, request_id=None):
             creds_json = base64.b64decode(creds_b64).decode("utf-8")
             creds_dict = json.loads(creds_json)
 
-            sender = os.getenv(
-                "NOTIFICATION_SENDER_EMAIL",
-                "shubhdesai111@gmail.com",
-            )
-
-            credentials = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=["https://www.googleapis.com/auth/gmail.send"],
-                subject=sender,
+            credentials = Credentials.from_authorized_user_info(
+                creds_dict, scopes=["https://www.googleapis.com/auth/gmail.send"]
             )
         else:
             raise NotImplementedError(
@@ -78,10 +71,8 @@ def send_email_notification(error_type, error_message, request_id=None):
         message["from"] = sender
         message["subject"] = subject
 
-        # Encode and send
-        user_id = sender if IN_GITHUB_ACTIONS else "me"
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        service.users().messages().send(userId=user_id, body={"raw": raw}).execute()
+        service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
         if IN_CLOUD_RUN:
             gcp_logger.log_struct(
