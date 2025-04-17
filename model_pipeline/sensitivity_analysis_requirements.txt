@@ -1,0 +1,25 @@
+# Core
+numpy
+pandas
+scikit-learn
+matplotlib
+seaborn
+python-dotenv
+PyYAML
+jinja2
+
+# LLM and Transformers
+transformers
+torch==2.6.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+
+# VertexAI (if using Google's PaLM or Gemini APIs)
+vertexai
+
+# MLflow for tracking
+mlflow==2.16.2
+
+# Google Cloud
+google-api-python-client
+google-auth-oauthlib
+google-cloud-logging==3.10.0
+google-cloud-secret-manager==2.20.0

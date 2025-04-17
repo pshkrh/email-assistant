@@ -28,4 +28,9 @@ bert-score
 spacy==3.8.3
 psycopg2-binary
 fairlearn==0.12.0
+shap>=0.46.0
+torch==2.6.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+seaborn
+google-cloud-storage==2.18.2
+matplotlib
 # blis  # Pin to a version with ARM64 pre-built wheel

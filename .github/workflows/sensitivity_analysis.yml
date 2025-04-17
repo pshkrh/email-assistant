@@ -1,0 +1,67 @@
+name: Run Bias + Validation Checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - model-deployment
+    paths:
+      - "model_pipeline/scripts/llm_generator.py"
+      - "model_pipeline/scripts/sensitivity_analysis.py"
+      - "model_pipeline/data/llm_generator_prompts.yaml"
+      - "model_pipeline/data/llm_generator_prompts_alternate.yaml"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_ACTIONS: true
+      GCP_GMAIL_SA_KEY_JSON: ${{ secrets.GCP_GMAIL_SA_KEY_JSON }}
+      GCP_DVC_SA_KEY_JSON: ${{ secrets.GCP_DVC_SA_KEY_JSON }}
+      NOTIFICATION_SENDER_EMAIL: ${{ secrets.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAIL: ${{ secrets.NOTIFICATION_RECIPIENT_EMAIL }}
+      GCP_PROJECT_ID: email-assistant-449706
+      MLFLOW_TRACKING_URI: https://mlflow-server-673808915782.us-central1.run.app
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache Hugging Face models
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade --prefer-binary -r model_pipeline/sensitivity_analysis_requirements.txt
+
+      - name: Decode GCP service account key for DVC
+        run: |
+          echo "$GCP_DVC_SA_KEY_JSON" > gcp-dvc-sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${PWD}/gcp-dvc-sa.json" >> $GITHUB_ENV
+
+      - name: Install DVC (GCS)
+        run: |
+          pip install dvc[gs]
+
+      - name: Configure DVC remote
+        run: |
+          dvc init
+          dvc remote add -d mail_mate gs://mail_mate || echo "Remote already exists"
+          dvc remote modify mail_mate credentialpath gcp-dvc-sa.json
+
+      - name: Pull DVC data
+        run: |
+          dvc pull model_pipeline/data/labeled_enron_sample_with_from.csv.dvc
+
+      - name: Run Sensitivity Analysis
+        run: |
+          python model_pipeline/scripts/sensitivity_analysis.py

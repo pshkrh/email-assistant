@@ -35,12 +35,12 @@ from send_notification import send_email_notification
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
+    # Initialize GCP Cloud Logging
+    gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
+    gcp_logger = gcp_client.logger("llm_generator")
+
 # Load environment variables
 load_dotenv(dotenv_path=MODEL_ENV_PATH)
-
-# Initialize GCP Cloud Logging
-gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
-gcp_logger = gcp_client.logger("llm_generator")
 
 # Initialize credentials based on environment
 if IN_CLOUD_RUN:
@@ -65,7 +65,8 @@ try:
     )
 except Exception as e:
     error_msg = f"Vertex AI initialization failed: {str(e)}"
-    gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
+    if IN_CLOUD_RUN:
+        gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
     send_email_notification("LLM Connection Failure", error_msg)
     raise
 
@@ -93,15 +94,16 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
     ):
         # Log parameters
         mlflow.log_params({"task": task, "request_id": request_id or "unknown"})
-        gcp_logger.log_struct(
-            {
-                "message": f"Generating outputs for task {task}",
-                "request_id": request_id or "unknown",
-                "task": task,
-                "prompt_length": len(prompt),
-            },
-            severity="INFO",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {
+                    "message": f"Generating outputs for task {task}",
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                    "prompt_length": len(prompt),
+                },
+                severity="INFO",
+            )
 
         # Generate 3 candidate outputs
         for i in range(3):
@@ -122,14 +124,15 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
                     error_msg = f"Empty response from LLM for task {task}"
                     outputs.append(error_msg)
                     mlflow.log_text(error_msg, f"{task}_output_{i}_error.txt")
-                    gcp_logger.log_struct(
-                        {
-                            "message": error_msg,
-                            "request_id": request_id or "unknown",
-                            "task": task,
-                        },
-                        severity="ERROR",
-                    )
+                    if IN_CLOUD_RUN:
+                        gcp_logger.log_struct(
+                            {
+                                "message": error_msg,
+                                "request_id": request_id or "unknown",
+                                "task": task,
+                            },
+                            severity="ERROR",
+                        )
                     send_email_notification("LLM Output Failure", error_msg, request_id)
                     continue
 
@@ -152,28 +155,30 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
 
                 # Log the generated output
                 mlflow.log_text(output, f"{task}_output_{i}.txt")
-                gcp_logger.log_struct(
-                    {
-                        "message": f"Generated output {i} for task {task}",
-                        "request_id": request_id or "unknown",
-                        "task": task,
-                        "output_length": len(output),
-                    },
-                    severity="DEBUG",
-                )
+                if IN_CLOUD_RUN:
+                    gcp_logger.log_struct(
+                        {
+                            "message": f"Generated output {i} for task {task}",
+                            "request_id": request_id or "unknown",
+                            "task": task,
+                            "output_length": len(output),
+                        },
+                        severity="DEBUG",
+                    )
             except Exception as e:
                 # Handle generation errors
                 error_msg = f"Failed to generate output {i} for task {task}: {str(e)}"
                 outputs.append(error_msg)
                 mlflow.log_text(error_msg, f"{task}_output_{i}_error.txt")
-                gcp_logger.log_struct(
-                    {
-                        "message": error_msg,
-                        "request_id": request_id or "unknown",
-                        "task": task,
-                    },
-                    severity="ERROR",
-                )
+                if IN_CLOUD_RUN:
+                    gcp_logger.log_struct(
+                        {
+                            "message": error_msg,
+                            "request_id": request_id or "unknown",
+                            "task": task,
+                        },
+                        severity="ERROR",
+                    )
                 send_email_notification("LLM Connection Failure", error_msg, request_id)
                 continue
 
@@ -182,16 +187,17 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
         mlflow.log_metrics(
             {"output_count": len(outputs), "generation_duration_seconds": duration}
         )
-        gcp_logger.log_struct(
-            {
-                "message": f"Completed generation for task {task}",
-                "request_id": request_id or "unknown",
-                "task": task,
-                "output_count": len(outputs),
-                "duration_seconds": duration,
-            },
-            severity="INFO",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {
+                    "message": f"Completed generation for task {task}",
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                    "output_count": len(outputs),
+                    "duration_seconds": duration,
+                },
+                severity="INFO",
+            )
     return outputs
 
 
@@ -218,10 +224,11 @@ def get_prompt_for_task(task, strategy="default"):
         )
         return prompts.get(task)
     except Exception as e:
-        gcp_logger.log_struct(
-            {"message": f"Failed to load prompt for task {task}", "error": str(e)},
-            severity="ERROR",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {"message": f"Failed to load prompt for task {task}", "error": str(e)},
+                severity="ERROR",
+            )
         raise
 
 
@@ -270,16 +277,17 @@ def process_email_body(
                 "body_length": len(body),
             }
         )
-        gcp_logger.log_struct(
-            {
-                "message": f"Processing email body for task {task}",
-                "request_id": request_id or "unknown",
-                "task": task,
-                "user_email": user_email,
-                "prompt_strategy": prompt_strategy.get(task, "default"),
-            },
-            severity="INFO",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {
+                    "message": f"Processing email body for task {task}",
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                    "user_email": user_email,
+                    "prompt_strategy": prompt_strategy.get(task, "default"),
+                },
+                severity="INFO",
+            )
 
         try:
             # Get prompt strategy and template
@@ -307,15 +315,16 @@ def process_email_body(
 
             # Log the full prompt
             mlflow.log_text(full_prompt, f"{task}_full_prompt.txt")
-            gcp_logger.log_struct(
-                {
-                    "message": f"Generated prompt for task {task}",
-                    "request_id": request_id or "unknown",
-                    "task": task,
-                    "prompt_length": len(full_prompt),
-                },
-                severity="DEBUG",
-            )
+            if IN_CLOUD_RUN:
+                gcp_logger.log_struct(
+                    {
+                        "message": f"Generated prompt for task {task}",
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                        "prompt_length": len(full_prompt),
+                    },
+                    severity="DEBUG",
+                )
 
             # Generate outputs using the LLM
             llm_outputs = {
@@ -331,26 +340,28 @@ def process_email_body(
             mlflow.log_dict(llm_outputs, f"{task}_outputs.json")
             duration = time.time() - start_time
             mlflow.log_metric("process_duration_seconds", duration)
-            gcp_logger.log_struct(
-                {
-                    "message": f"Completed processing for task {task}",
-                    "request_id": request_id or "unknown",
-                    "task": task,
-                    "output_count": len(llm_outputs[task]),
-                    "duration_seconds": duration,
-                },
-                severity="INFO",
-            )
+            if IN_CLOUD_RUN:
+                gcp_logger.log_struct(
+                    {
+                        "message": f"Completed processing for task {task}",
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                        "output_count": len(llm_outputs[task]),
+                        "duration_seconds": duration,
+                    },
+                    severity="INFO",
+                )
             return llm_outputs
         except (FileNotFoundError, yaml.YAMLError, ValueError) as e:
             error_msg = f"Error in process_email_body: {str(e)}"
             mlflow.log_param("error", error_msg)
-            gcp_logger.log_struct(
-                {
-                    "message": error_msg,
-                    "request_id": request_id or "unknown",
-                    "task": task,
-                },
-                severity="ERROR",
-            )
+            if IN_CLOUD_RUN:
+                gcp_logger.log_struct(
+                    {
+                        "message": error_msg,
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                    },
+                    severity="ERROR",
+                )
             raise

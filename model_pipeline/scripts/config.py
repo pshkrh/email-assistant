@@ -29,6 +29,12 @@ PREDICTED_CSV_PATH = os.path.join(
 )  # pred csv for 100 mails
 LABELED_SAMPLE_CSV_PATH = os.path.join(DATA_DIR, "labeled_enron_sample.csv")
 PREDICTED_SAMPLE_CSV_PATH = os.path.join(DATA_DIR, "predicted_enron_sample.csv")
+LABELED_SAMPLE_FROM_CSV_PATH = os.path.join(
+    DATA_DIR, "labeled_enron_sample_with_from.csv"
+)
+PREDICTED_SAMPLE_FROM_CSV_PATH = os.path.join(
+    DATA_DIR, "predicted_enron_sample_with_from.csv"
+)
 
 # LLM Configuration Files Path
 STRUCTURE_PROMPTS_YAML = os.path.join(DATA_DIR, "llm_output_structure.yaml")
