@@ -17,9 +17,9 @@ from config import (
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
-# Initialize GCP Cloud Logging
-gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
-gcp_logger = gcp_client.logger("notification_sender")
+    # Initialize GCP Cloud Logging
+    gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
+    gcp_logger = gcp_client.logger("notification_sender")
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
@@ -70,22 +70,24 @@ def send_email_notification(error_type, error_message, request_id=None):
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
         service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
-        gcp_logger.log_struct(
-            {
-                "message": f"Sent email notification for {error_type}",
-                "request_id": request_id or "unknown",
-                "recipient": recipient,
-            },
-            severity="INFO",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {
+                    "message": f"Sent email notification for {error_type}",
+                    "request_id": request_id or "unknown",
+                    "recipient": recipient,
+                },
+                severity="INFO",
+            )
 
     except Exception as e:
-        gcp_logger.log_struct(
-            {
-                "message": f"Failed to send email notification for {error_type}",
-                "error": str(e),
-                "request_id": request_id or "unknown",
-            },
-            severity="ERROR",
-        )
+        if IN_CLOUD_RUN:
+            gcp_logger.log_struct(
+                {
+                    "message": f"Failed to send email notification for {error_type}",
+                    "error": str(e),
+                    "request_id": request_id or "unknown",
+                },
+                severity="ERROR",
+            )
         raise
