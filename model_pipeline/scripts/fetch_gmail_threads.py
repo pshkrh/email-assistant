@@ -1,15 +1,22 @@
+"""
+Gmail Thread Fetcher Module
+
+This module provides a Flask API server that processes Gmail thread data, generates
+task-specific outputs (summaries, action items, and draft replies), and handles
+user feedback for performance improvement.
+"""
+
 import os
-import pickle
-import base64
 import uuid
 import time
 import logging
-from flask import Flask, request, jsonify
-from google.cloud import logging as gcp_logging
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
-from flask_cors import CORS
+from datetime import datetime
+
 import mlflow
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from google.cloud import logging as gcp_logging
+
 from llm_generator import process_email_body
 from llm_ranker import rank_all_outputs
 from output_verifier import verify_all_outputs
@@ -26,15 +33,13 @@ from config import (
 from mlflow_config import configure_mlflow
 from config import MLFLOW_EXPERIMENT_NAME
 from send_notification import send_email_notification
-from monitoring_api import (
-    register_monitoring_endpoints,
-)
-from performance_monitor import get_user_prompt_strategies
-from datetime import datetime
+from monitoring_api import register_monitoring_endpoints
 
+# Import secret manager if in Cloud Run
 if IN_CLOUD_RUN:
     from secret_manager import get_credentials_from_secret
 
+# Initialize Flask application
 app = Flask(__name__)
 
 # Set up GCP Cloud Logging
@@ -44,8 +49,15 @@ logging.getLogger().setLevel(logging.DEBUG)  # Fallback for local development
 
 
 def setup_mlflow():
+    """
+    Set up MLflow for tracking metrics and artifacts.
+
+    Returns:
+        str: MLflow experiment ID
+    """
     # Set up MLflow
     experiment = configure_mlflow()  # Set tracking URI once
+
     # Try to set the experiment, fall back to default if it fails
     try:
         if experiment is None:
@@ -75,7 +87,13 @@ def determine_prompt_strategy(email, tasks, request_id=None):
     1. User's personal strategy settings (if available)
     2. User's recent feedback history (if negative)
 
-    Returns a dictionary mapping task types to strategies and the sources of those decisions.
+    Args:
+        email (str): User email
+        tasks (list): List of tasks to determine strategies for
+        request_id (str, optional): Unique identifier for request correlation
+
+    Returns:
+        tuple: (prompt_strategy, strategy_sources, negative_examples_by_task)
     """
     prompt_strategy = {
         "summary": None,
@@ -208,9 +226,11 @@ def determine_prompt_strategy(email, tasks, request_id=None):
     return prompt_strategy, strategy_sources, negative_examples_by_task
 
 
+# Configure Flask app
 app.logger.handlers = []
 app.logger.propagate = False
 
+# Configure CORS for Chrome extension
 CORS(
     app,
     resources={
@@ -223,7 +243,7 @@ CORS(
     },
 )
 
-# Load Gmail API credentials
+# Load Gmail API credentials in Cloud Run
 if IN_CLOUD_RUN:
     try:
         get_credentials_from_secret(
@@ -243,14 +263,24 @@ if IN_CLOUD_RUN:
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint for uptime monitoring."""
+    """
+    Health check endpoint for uptime monitoring.
+
+    Returns:
+        tuple: (JSON response, HTTP status code)
+    """
     gcp_logger.log_text("Health check requested", severity="INFO")
     return jsonify({"status": "healthy"}), 200
 
 
 @app.route("/fetch_gmail_thread", methods=["POST"])
 def fetch_gmail_thread():
-    """Fetch email thread details for a given thread ID."""
+    """
+    Fetch email thread details for a given thread ID and process it with LLMs.
+
+    Returns:
+        tuple: (JSON response, HTTP status code)
+    """
     experiment_id = setup_mlflow()
     request_id = str(uuid.uuid4())  # Unique ID for request correlation
     start_time = time.time()
@@ -266,9 +296,14 @@ def fetch_gmail_thread():
         experiment_id=experiment_id, run_name=f"fetch_gmail_thread_{request_id}"
     ):
         try:
+            # Log the MLflow artifact URI
             artifact_uri = mlflow.get_artifact_uri()
             gcp_logger.log_text(f"Artifact URI: {artifact_uri}", severity="INFO")
+
+            # Get request data
             data = request.get_json()
+
+            # Validate required fields
             required_fields = [
                 "userEmail",
                 "messageId",
@@ -286,6 +321,7 @@ def fetch_gmail_thread():
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
 
+            # Extract key data from request
             thread_id = data.get("threadId")
             email = data.get("userEmail")
             requested_tasks = data.get("tasks", [])
@@ -312,6 +348,7 @@ def fetch_gmail_thread():
                 severity="DEBUG",
             )
 
+            # Validate tasks
             if not requested_tasks:
                 error_msg = "No task specified"
                 gcp_logger.log_struct(
@@ -320,7 +357,7 @@ def fetch_gmail_thread():
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
 
-            # Check existing record
+            # Check if we already have results for this thread
             existing_record = get_existing_user_feedback(
                 email, thread_id, data["messagesCount"], requested_tasks
             )
@@ -363,7 +400,7 @@ def fetch_gmail_thread():
                 }
             )
 
-            # Determine which tasks need regeneration
+            # Determine which tasks need regeneration vs. reuse of existing results
             for task in requested_tasks:
                 output_column = task
                 feedback_column = f"{task}_feedback"
@@ -371,6 +408,7 @@ def fetch_gmail_thread():
                     output_value = existing_record.get(output_column)
                     feedback_value = existing_record.get(feedback_column)
                     if output_value and (feedback_value == 1 or feedback_value is None):
+                        # Reuse existing output with positive/no feedback
                         results[task] = output_value
                         prompt_strategy[task] = "reused"
                         task_regen_needed[task] = False
@@ -389,6 +427,7 @@ def fetch_gmail_thread():
             for task in requested_tasks:
                 if not task_regen_needed.get(task):
                     continue
+
                 gcp_logger.log_struct(
                     {
                         "message": f"Generating output for task {task}",
@@ -399,7 +438,10 @@ def fetch_gmail_thread():
                 )
 
                 try:
+                    # Get email body
                     body = data["body"]
+
+                    # Step 1: Generate multiple candidate outputs
                     llm_generator_output = process_email_body(
                         body=body,
                         task=task,
@@ -409,6 +451,8 @@ def fetch_gmail_thread():
                         negative_examples=negative_examples_by_task.get(task, []),
                         request_id=request_id,
                     )
+
+                    # Step 2: Rank the candidate outputs
                     llm_ranker_output = rank_all_outputs(
                         llm_outputs=llm_generator_output,
                         task=task,
@@ -416,6 +460,8 @@ def fetch_gmail_thread():
                         experiment_id=experiment_id,
                         request_id=request_id,
                     )
+
+                    # Step 3: Verify and select the best output
                     best_output = verify_all_outputs(
                         ranked_outputs_dict=llm_ranker_output,
                         task=task,
@@ -424,6 +470,8 @@ def fetch_gmail_thread():
                         experiment_id=experiment_id,
                         request_id=request_id,
                     )
+
+                    # Store the best output
                     results[task] = best_output
 
                     # Log task output as artifact
@@ -464,6 +512,7 @@ def fetch_gmail_thread():
                     not needed for needed in task_regen_needed.values()
                 )
                 if not all_tasks_reused:
+                    # Save new data
                     table_docid = save_to_db(
                         message_data,
                         {
@@ -473,9 +522,11 @@ def fetch_gmail_thread():
                         },
                     )
                 elif existing_record:
+                    # Reuse existing doc ID
                     table_docid = existing_record["id"]
                 else:
                     table_docid = None
+
                 gcp_logger.log_struct(
                     {
                         "message": "Saved to database",
@@ -495,6 +546,7 @@ def fetch_gmail_thread():
                 send_email_notification("Database Save Failure", error_msg, request_id)
                 return jsonify({"error": error_msg}), 500
 
+            # Prepare response
             response = {
                 "threadId": thread_id,
                 "userEmail": email,
@@ -530,7 +582,14 @@ def fetch_gmail_thread():
 
 @app.route("/store_feedback", methods=["POST"])
 def store_feedback():
-    """Store user feedback for a task."""
+    """
+    Store user feedback for a task.
+
+    Handles thumbs up/down feedback on generated content and updates the database.
+
+    Returns:
+        tuple: (JSON response, HTTP status code)
+    """
     experiment_id = setup_mlflow()
     request_id = str(uuid.uuid4())
     start_time = time.time()
@@ -543,6 +602,7 @@ def store_feedback():
         experiment_id=experiment_id, run_name=f"store_feedback_{request_id}"
     ):
         try:
+            # Get and validate request data
             data = request.get_json()
             required_fields = [
                 "userEmail",
@@ -552,6 +612,8 @@ def store_feedback():
                 "timestamp",
                 "docId",
             ]
+
+            # Check for missing JSON payload
             if not data:
                 error_msg = "Missing JSON payload"
                 gcp_logger.log_struct(
@@ -559,6 +621,8 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
+
+            # Check for missing required fields
             missing = [field for field in required_fields if field not in data]
             if missing:
                 error_msg = f"Missing required fields: {', '.join(missing)}"
@@ -567,9 +631,15 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
+
+            # Extract key data
             task = data["task"]
-            feedback = 0 if data["rating"] == "thumbs_down" else 1
+            feedback = (
+                0 if data["rating"] == "thumbs_down" else 1
+            )  # Convert rating to binary
             doc_id = data["docId"]
+
+            # Log parameters
             mlflow.log_params(
                 {
                     "user_email": data["userEmail"],
@@ -580,6 +650,7 @@ def store_feedback():
                 }
             )
             mlflow.log_dict(data, "feedback_request.json")
+
             gcp_logger.log_struct(
                 {
                     "message": "Processing feedback",
@@ -590,12 +661,16 @@ def store_feedback():
                 },
                 severity="DEBUG",
             )
+
+            # Map task names to database column names
             valid_tasks = {
                 "summary": "summary_feedback",
                 "action_items": "action_items_feedback",
                 "draft_reply": "draft_reply_feedback",
             }
             column_name = valid_tasks.get(task)
+
+            # Validate task type
             if not column_name:
                 error_msg = f"Invalid task type: {task}"
                 gcp_logger.log_struct(
@@ -603,10 +678,13 @@ def store_feedback():
                 )
                 mlflow.log_param("error", error_msg)
                 return jsonify({"error": error_msg}), 400
+
             try:
+                # Update the database with user feedback
                 response = update_user_feedback(
                     column_name=column_name, feedback=feedback, doc_id=doc_id
                 )
+
                 gcp_logger.log_struct(
                     {
                         "message": "Feedback stored successfully",

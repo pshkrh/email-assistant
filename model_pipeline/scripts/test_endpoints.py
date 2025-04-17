@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """
 Comprehensive pre-deployment verification script for the MailMate system.
-Tests all major functionality with detailed output of responses.
+
+This script tests all major functionality with detailed output of responses.
+It verifies the health of endpoints, database schema, and prompt optimization
+capabilities before deployment to production.
 """
 
-import requests
+import sys
 import logging
 import json
-import sys
 import uuid
 import os
 import subprocess
 from datetime import datetime, timedelta
+
+import requests
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
 from config import DB_NAME, USER, PASSWORD, HOST, PORT
 
 # Configure logging
@@ -23,15 +28,21 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-# Server URL
-BASE_URL = "http://localhost:8000"  # Change to your server URL
+# Server URL - change to your server URL as needed
+BASE_URL = "http://localhost:8000"
 
 # Test user for specific user tests - using a UUID to ensure it's unique
 TEST_USER = f"test_user_{uuid.uuid4().hex[:8]}@example.com"
 
 
 def print_json(data, title):
-    """Print JSON data in a formatted way with a title"""
+    """
+    Print JSON data in a formatted way with a title.
+
+    Args:
+        data (dict): JSON data to print
+        title (str): Title for the JSON output
+    """
     print("\n" + "=" * 80)
     print(f" {title} ".center(80, "="))
     print("=" * 80)
@@ -40,7 +51,14 @@ def print_json(data, title):
 
 
 def reset_and_initialize_db():
-    """Reset the database and initialize the tables"""
+    """
+    Reset the database and initialize the tables.
+
+    Runs the initialize_db.py script with reset flags.
+
+    Returns:
+        bool: True if reset and initialization successful, False otherwise
+    """
     logging.info("Resetting and initializing the database...")
 
     # Get the path to the initialize_db.py script
@@ -49,9 +67,8 @@ def reset_and_initialize_db():
     # Assuming initialize_db.py is in the same directory
     script_path = os.path.join(current_dir, "initialize_db.py")
 
-    # If not in the same directory, you may need to adjust the path
+    # If not in the same directory, try one level up
     if not os.path.exists(script_path):
-        # Try one level up
         script_path = os.path.join(os.path.dirname(current_dir), "initialize_db.py")
 
     if not os.path.exists(script_path):
@@ -86,7 +103,14 @@ def reset_and_initialize_db():
 
 
 def setup_test_user():
-    """Setup a test user with a strategy that needs optimization"""
+    """
+    Setup a test user with a strategy that needs optimization.
+
+    Creates a user with below-threshold performance for testing.
+
+    Returns:
+        bool: True if setup successful, False otherwise
+    """
     logging.info(f"Setting up test user: {TEST_USER}...")
 
     try:
@@ -121,7 +145,7 @@ def setup_test_user():
         today = datetime.now().date()
         dates = [(today - timedelta(days=i)) for i in range(1, 8)]
 
-        # First, check the user_feedback table schema to ensure we include all required fields
+        # First, check the user_feedback table schema
         cur.execute(
             """
             SELECT column_name, is_nullable
@@ -242,7 +266,14 @@ def setup_test_user():
 
 
 def test_check_performance():
-    """Test the check_performance endpoint"""
+    """
+    Test the check_performance endpoint.
+
+    Validates that the endpoint returns performance metrics correctly.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
     logging.info("Testing check_performance endpoint for all users...")
 
     # Test all users
@@ -270,7 +301,14 @@ def test_check_performance():
 
 
 def test_optimize_prompts():
-    """Test the optimize_prompts endpoint"""
+    """
+    Test the optimize_prompts endpoint.
+
+    Validates that the endpoint optimizes prompts based on performance metrics.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
     logging.info("Testing optimize_prompts endpoint for all users...")
 
     # Set proper headers for JSON content
@@ -356,7 +394,14 @@ def test_optimize_prompts():
 
 
 def test_optimization_history():
-    """Test the get_optimization_history endpoint"""
+    """
+    Test the get_optimization_history endpoint.
+
+    Validates that the endpoint returns optimization history correctly.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
     logging.info("Testing get_optimization_history endpoint for all users...")
 
     # Test all users
@@ -431,7 +476,14 @@ def test_optimization_history():
 
 
 def test_user_strategies():
-    """Test the get_user_strategies endpoint"""
+    """
+    Test the get_user_strategies endpoint.
+
+    Validates that the endpoint returns user strategies correctly.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
     logging.info(f"Testing get_user_strategies endpoint for user: {TEST_USER}...")
 
     response = requests.get(f"{BASE_URL}/get_user_strategies?user_email={TEST_USER}")
@@ -457,8 +509,16 @@ def test_user_strategies():
 
 
 def test_scheduled_check():
-    """Test the scheduled_check endpoint"""
-    # For a more independent test, create a new test user that hasn't been optimized
+    """
+    Test the scheduled_check endpoint.
+
+    Validates that the scheduled check endpoint works correctly.
+    Creates a test user with low performance to verify optimization.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
+    # Create a new test user that hasn't been optimized
     new_scheduled_test_user = f"scheduled_test_user_{uuid.uuid4().hex[:8]}@example.com"
 
     try:
@@ -573,7 +633,14 @@ def test_scheduled_check():
 
 
 def test_database_schema():
-    """Test the database schema"""
+    """
+    Test the database schema.
+
+    Validates that necessary tables and columns exist in the database.
+
+    Returns:
+        bool: True if test passed, False otherwise
+    """
     logging.info("\n🔍 Database Schema Verification")
 
     try:
@@ -608,7 +675,7 @@ def test_database_schema():
                 logging.error(f"❌ Table {table} does not exist")
                 return False
 
-        # Check column existence for user_prompt_strategies
+        # Check column existence for key tables
         required_columns = {
             "user_prompt_strategies": [
                 "user_email",
@@ -655,7 +722,12 @@ def test_database_schema():
 
 
 def run_all_tests():
-    """Run all verification tests"""
+    """
+    Run all verification tests.
+
+    Executes a comprehensive test suite to validate system functionality.
+    Prints a summary of results at the end.
+    """
     print("\n" + "=" * 80)
     print(" MAILMATE SYSTEM COMPREHENSIVE PRE-DEPLOYMENT VERIFICATION ".center(80, "="))
     print("=" * 80)
@@ -676,6 +748,7 @@ def run_all_tests():
             logging.info("Tests aborted.")
             return False
 
+    # Define all tests to run
     tests = [
         ("Performance Metrics", test_check_performance),
         ("Prompt Optimization", test_optimize_prompts),
@@ -685,6 +758,7 @@ def run_all_tests():
         ("Database Schema", test_database_schema),
     ]
 
+    # Execute tests and track results
     results = {}
     for name, test_func in tests:
         print("\n" + "-" * 80)
@@ -699,7 +773,7 @@ def run_all_tests():
             logging.exception(e)
             results[name] = False
 
-    # Print summary
+    # Print summary of results
     print("\n\n" + "=" * 80)
     print(" TEST RESULTS SUMMARY ".center(80, "="))
     print("=" * 80)

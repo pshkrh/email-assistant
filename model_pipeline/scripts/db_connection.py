@@ -1,8 +1,19 @@
+"""
+Database Connection Module
+
+This module handles database connectivity for the application.
+It provides a function to create database connections that work both in
+Cloud Run (using Unix socket) and in local development (using TCP).
+"""
+
 import os
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
+
 from config import DB_NAME, USER, PASSWORD, HOST, PORT
 
+# Database connection configuration
 DB_CONFIG = {
     "dbname": DB_NAME,
     "user": USER,
@@ -13,7 +24,16 @@ DB_CONFIG = {
 
 
 def get_db_connection():
-    # For Cloud Run connecting to Cloud SQL
+    """
+    Get a PostgreSQL database connection.
+
+    Creates a connection to the database using either Unix socket (Cloud Run)
+    or TCP (local development) depending on the environment.
+
+    Returns:
+        Connection: A psycopg2 database connection with RealDictCursor factory
+    """
+    # Check if running in Cloud Run
     if os.environ.get("K_SERVICE"):
         # Cloud SQL connection using Unix socket
         db_socket_dir = os.environ.get("DB_SOCKET_DIR", "/cloudsql")

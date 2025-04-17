@@ -1,19 +1,27 @@
-# model_pipeline/config.py
+"""
+Configuration Module
+
+This module centralizes configuration settings for the email assistant application.
+It handles environment variables, file paths, and other shared configuration settings.
+"""
+
 import os
 import json
+
 from get_project_root import project_root
 
 # Project root directory path
 PROJECT_ROOT = project_root()
 
-# Check if running in Cloud Run
+# Environment detection
+# Check if running in Cloud Run based on K_SERVICE environment variable
 IN_CLOUD_RUN = os.environ.get("K_SERVICE") is not None
 GCP_PROJECT_ID = os.environ.get("GCP_PROJECT_ID", "email-assistant-449706")
 
 # Data directory path where all the data and yaml files are stored
 DATA_DIR = os.path.join(PROJECT_ROOT, "model_pipeline", "data")
 
-# Data files path
+# Data file paths
 ENRON_CSV = os.path.join(DATA_DIR, "enron_emails.csv")
 LABELED_CSV_PATH = os.path.join(DATA_DIR, "labeled_enron.csv")
 PREDICTED_CSV_PATH = os.path.join(
@@ -51,7 +59,7 @@ SERVICE_ACCOUNT_FILE = os.path.join(CREDENTIALS_DIR, "GoogleCloudCredential.json
 # Model .env path
 MODEL_ENV_PATH = os.path.join(PROJECT_ROOT, "model_pipeline", ".env")
 
-# Gmail API Configuration
+# Gmail API Configuration - use environment variables or defaults
 GMAIL_SCOPES = json.loads(
     os.environ.get("GMAIL_SCOPES", '["https://www.googleapis.com/auth/gmail.readonly"]')
 )
@@ -63,7 +71,7 @@ MLFLOW_EXPERIMENT_NAME = os.environ.get(
     "MLFLOW_EXPERIMENT_NAME", "MailMate_Email_Assistant"
 )
 
-# DB configurations
+# Database configurations
 DB_NAME = os.environ.get("DB_NAME", "mail_mate_user_data")
 USER = os.environ.get("DB_USER", "postgres")
 PASSWORD = os.environ.get("DB_PASSWORD", "postgres")

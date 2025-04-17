@@ -1,28 +1,38 @@
+"""
+Bias Checker Module
+
+This module evaluates the system's outputs for potential biases across different slices
+of data (e.g., email length, complexity, sender role). It assesses the quality of generated
+content by comparing against human-labeled data using various metrics including:
+- BERT Score
+- Rouge Score
+- Named Entity Recognition Coverage
+"""
+
 import pandas as pd
-import numpy as np
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
-from rouge_score import rouge_scorer
-from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
-from bert_score import score
-from transformers import logging
 import spacy
-import matplotlib.pyplot as plt
-import seaborn as sns
-import json
 import mlflow
+from rouge_score import rouge_scorer
+from bert_score import score
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+from transformers import logging as hf_logging
+
+from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
+from mlflow_config import configure_mlflow
 from send_notification import send_email_notification
 
-from mlflow_config import configure_mlflow
+# Configure logging and load NLP model
+hf_logging.set_verbosity_error()  # Suppress transformer warnings
+nlp = spacy.load("en_core_web_sm")  # Load spaCy model for NER
 
 # Path to enron_emails.csv
 ENRON_EMAILS_CSV_PATH = "data_pipeline/data/enron_emails.csv"
 
-logging.set_verbosity_error()
-nlp = spacy.load("en_core_web_sm")
-
+# Set up MLflow experiment
 experiment = configure_mlflow()
 experiment_id = experiment.experiment_id if experiment else None
 
+# Phrases indicating empty action items
 negation_phrases = (
     "No",
     "None",
@@ -39,7 +49,18 @@ negation_phrases = (
 
 
 def remove_no_action_items(df):
+    """
+    Remove rows where action items are empty or negative.
+
+    Args:
+        df (DataFrame): Input DataFrame containing action items
+
+    Returns:
+        DataFrame: Filtered DataFrame
+    """
     df["action_item"] = df["action_item"].astype(str)
+
+    # Define patterns for identifying "no action items" responses
     no_action_keywords = [
         "no action items",
         "none",
@@ -50,15 +71,27 @@ def remove_no_action_items(df):
         "None",
     ]
     pattern = "|".join(no_action_keywords)
+
+    # Filter out rows containing no action items
     filtered_df = df[~df["action_item"].str.contains(f"(?i){pattern}", na=False)]
     filtered_df = filtered_df[
         ~filtered_df["action_item"].str.startswith(negation_phrases, na=False)
     ]
     filtered_df = filtered_df[filtered_df["action_item"].str.strip() != ""]
+
     return filtered_df
 
 
 def extract_named_entities(text):
+    """
+    Extract named entities from text using spaCy.
+
+    Args:
+        text (str): Text to extract entities from
+
+    Returns:
+        set: Set of named entities
+    """
     if not isinstance(text, str):
         text = ""
     doc = nlp(text)
@@ -66,24 +99,60 @@ def extract_named_entities(text):
 
 
 def compute_bert_score(pred_text, true_text, model_type="roberta-large"):
+    """
+    Compute BERT score between predicted and ground truth text.
+
+    Args:
+        pred_text (str): Predicted text
+        true_text (str): Ground truth text
+        model_type (str): Model to use for BERT score computation
+
+    Returns:
+        tuple: Precision, Recall, and F1 scores
+    """
     if not isinstance(true_text, str) and not isinstance(pred_text, str):
-        return 1.0, 1.0, 1.0
+        return 1.0, 1.0, 1.0  # Default for empty texts
+
+    # Normalize inputs
     pred_text = str(pred_text) if isinstance(pred_text, str) else ""
     true_text = str(true_text) if isinstance(true_text, str) else ""
 
+    # Calculate scores
     P, R, F1 = score([pred_text], [true_text], model_type=model_type, verbose=False)
     return float(P[0]), float(R[0]), float(F1[0])
 
 
 def calculate_rouge_scores(pred_text, true_text):
+    """
+    Calculate Rouge-L scores between predicted and ground truth text.
+
+    Args:
+        pred_text (str): Predicted text
+        true_text (str): Ground truth text
+
+    Returns:
+        float: Rouge-L F-measure score
+    """
+    # Normalize inputs
     pred_text = str(pred_text) if isinstance(pred_text, str) else ""
     true_text = str(true_text) if isinstance(true_text, str) else ""
+
+    # Calculate Rouge-L score
     scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
     scores = scorer.score(true_text, pred_text)
     return scores["rougeL"].fmeasure
 
 
 def classify_length_category(text):
+    """
+    Classify text into length categories based on character count.
+
+    Args:
+        text (str): Text to classify
+
+    Returns:
+        str: Length category ("short", "medium", or "long")
+    """
     length = len(str(text))
     if length <= 700:
         return "short"
@@ -94,15 +163,35 @@ def classify_length_category(text):
 
 
 def classify_role(sender):
+    """
+    Classify email sender role based on job title in email address.
+
+    Args:
+        sender (str): Sender email or name
+
+    Returns:
+        str: Role category ("manager" or "team_member")
+    """
     if pd.isna(sender):
         return "unknown"
+
     sender = str(sender).lower()
     if "manager" in sender or "director" in sender:
         return "manager"
+
     return "team_member"
 
 
 def compute_complexity(text):
+    """
+    Compute text complexity based on average sentence length.
+
+    Args:
+        text (str): Text to analyze
+
+    Returns:
+        str: Complexity category ("high" or "low")
+    """
     doc = nlp(str(text))
     sentences = list(doc.sents)
     avg_len = sum(len(sent) for sent in sentences) / len(sentences) if sentences else 0
@@ -110,16 +199,29 @@ def compute_complexity(text):
 
 
 def check_bias(labeled_df, predicted_df):
+    """
+    Check for biases in model predictions across different data slices.
+
+    Args:
+        labeled_df (DataFrame): DataFrame with ground truth labels
+        predicted_df (DataFrame): DataFrame with model predictions
+    """
+    # Merge the dataframes on Message-ID
     merged_df = pd.merge(
         labeled_df, predicted_df, on="Message-ID", suffixes=("_true", "_pred")
     )
+
+    # Log merged columns for debugging
     mlflow.log_dict(
         {"merged_df_columns": list(merged_df.columns)}, "merged_df_cols.json"
     )
+
+    # Create slices for analysis
     merged_df["length_slice"] = merged_df["Body_true"].apply(classify_length_category)
     merged_df["complexity_slice"] = merged_df["Body_true"].apply(compute_complexity)
     merged_df["role_slice"] = merged_df["Sender"].apply(classify_role)
 
+    # Log slice statistics
     mlflow.log_dict(
         {
             "length_slice": merged_df["length_slice"].value_counts().to_dict(),
@@ -129,6 +231,7 @@ def check_bias(labeled_df, predicted_df):
         "slice_counts.json",
     )
 
+    # Define tasks and quality thresholds
     tasks = ["summary", "action_item", "draft_reply"]
     task_thresholds = {
         "summary": {"bert_f1": 0.8, "ner": 0.7, "rouge_l": 0.7},  # Tightened
@@ -136,18 +239,27 @@ def check_bias(labeled_df, predicted_df):
         "draft_reply": {"bert_f1": 0.8, "ner": 0.8},  # Loosened
     }
 
+    # Track failure cases and alerts
     failure_cases = []
     alert_triggered = False
     alert_messages = []
+
+    # Analyze each task
     for task in tasks:
         y_true_col = f"{task}_true"
         y_pred_col = f"{task}_pred"
 
         def compute_scores(row):
+            """Compute quality scores for a single row"""
+            # Calculate BERT score
             bert_p, bert_r, bert_f1 = compute_bert_score(
                 row[y_pred_col], row[y_true_col]
             )
+
+            # Calculate Rouge-L score
             rouge_l = calculate_rouge_scores(row[y_pred_col], row[y_true_col])
+
+            # Calculate NER coverage
             true_ents = extract_named_entities(row[y_true_col])
             pred_ents = extract_named_entities(row[y_pred_col])
             ner_coverage = (
@@ -156,12 +268,14 @@ def check_bias(labeled_df, predicted_df):
                 else len(true_ents.intersection(pred_ents)) / len(true_ents)
             )
 
+            # Compile scores
             scores = {
                 "bert_f1": bert_f1,
                 "rouge_l": rouge_l,
                 "ner_coverage": ner_coverage,
             }
 
+            # Check if output meets quality thresholds
             thresholds = task_thresholds[task]
             is_correct = (
                 bert_f1 >= thresholds["bert_f1"]
@@ -170,6 +284,7 @@ def check_bias(labeled_df, predicted_df):
             )
             scores["correct"] = int(is_correct)
 
+            # Track failure cases
             if not is_correct:
                 failure_cases.append(
                     {
@@ -188,12 +303,14 @@ def check_bias(labeled_df, predicted_df):
 
             return scores
 
+        # Apply scoring to all rows
         merged_df[f"scores_{task}"] = merged_df.apply(compute_scores, axis=1)
-        merged_df[f"y_true_{task}"] = 1
+        merged_df[f"y_true_{task}"] = 1  # Assuming all ground truth is correct
         merged_df[f"y_pred_{task}"] = merged_df[f"scores_{task}"].apply(
             lambda x: x["correct"]
         )
 
+        # Analyze bias across different slices
         for slice_type in ["length_slice", "complexity_slice", "role_slice"]:
             results = {}
             for group in merged_df[slice_type].unique():
@@ -201,6 +318,7 @@ def check_bias(labeled_df, predicted_df):
                 if slice_df.empty:
                     continue
 
+                # Calculate metrics for this slice
                 y_true = slice_df[f"y_true_{task}"]
                 y_pred = slice_df[f"y_pred_{task}"]
                 precision = precision_score(y_true, y_pred, zero_division=0)
@@ -215,10 +333,13 @@ def check_bias(labeled_df, predicted_df):
                     "accuracy": accuracy,
                 }
 
+            # Check for significant accuracy gaps between slices (potential bias)
             if len(results) >= 2:
                 acc_values = [v["accuracy"] for v in results.values()]
                 acc_gap = max(acc_values) - min(acc_values)
-                if acc_gap > 0.15:
+
+                # If gap exceeds threshold, log it and trigger alert
+                if acc_gap > 0.15:  # 15% accuracy gap threshold
                     gap_info = {
                         "task": task,
                         "slice_type": slice_type,
@@ -235,8 +356,10 @@ def check_bias(labeled_df, predicted_df):
                     alert_msg = f"⚠️ Accuracy gap {acc_gap:.2f} in task '{task}' across {slice_type} slices"
                     alert_messages.append(alert_msg)
 
+            # Log slice results
             mlflow.log_dict(results, f"bias_results_{task}_{slice_type}.json")
 
+        # Send alerts if triggered
         if alert_triggered:
             alert_body = "\n".join(alert_messages)
             send_email_notification(
@@ -245,6 +368,7 @@ def check_bias(labeled_df, predicted_df):
                 request_id="bias_checker",
             )
 
+    # Save failure cases and full evaluation
     pd.DataFrame(failure_cases).to_csv("failure_cases.csv", index=False)
     mlflow.log_artifact("failure_cases.csv")
     merged_df.to_csv("bias_evaluation.csv", index=False)
@@ -252,25 +376,43 @@ def check_bias(labeled_df, predicted_df):
 
 
 def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_PATH):
+    """
+    Main function to run bias checking.
+
+    Args:
+        predicted_csv_path (str): Path to CSV with model predictions
+        labeled_csv_path (str): Path to CSV with ground truth labels
+        enron_csv_path (str): Path to Enron emails dataset
+    """
     with mlflow.start_run(
         nested=True, experiment_id=experiment_id, run_name="bias_checker_run"
     ):
+        # Log MLflow configuration for reference
         backend_uri = mlflow.get_tracking_uri()
         print(f"✅ MLflow Tracking URI: {backend_uri}")
         print(f"📌 MLflow Run ID: {mlflow.active_run().info.run_id}")
         print(f"🔗 View locally: mlflow ui --backend-store-uri '{backend_uri}'")
+
+        # Log parameters
         mlflow.log_param("predicted_csv_path", predicted_csv_path)
         mlflow.log_param("labeled_csv_path", labeled_csv_path)
         mlflow.log_param("enron_csv_path", enron_csv_path)
+
+        # Load datasets
         labeled_df = pd.read_csv(labeled_csv_path)
         predicted_df = pd.read_csv(predicted_csv_path)
+
+        # Get sender information from Enron dataset
         enron_df = pd.read_csv(enron_csv_path)[["Message-ID", "From"]].rename(
             columns={"From": "Sender"}
         )
+
+        # Merge sender info with labeled data
         labeled_df = pd.merge(labeled_df, enron_df, on="Message-ID", how="left")
         if labeled_df["Sender"].isna().all():
             labeled_df["Sender"] = "unknown"
 
+        # Verify all required columns are present
         required_cols = [
             "Message-ID",
             "Subject",
@@ -287,9 +429,11 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
             if missing:
                 raise ValueError(f"Missing columns in {name} CSV: {missing}")
 
+        # Filter out "no action items" cases for cleaner analysis
         predicted_df = remove_no_action_items(predicted_df)
         labeled_df = remove_no_action_items(labeled_df)
 
+        # Run bias checking
         check_bias(labeled_df, predicted_df)
 
 

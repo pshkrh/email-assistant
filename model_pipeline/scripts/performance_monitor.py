@@ -1,10 +1,19 @@
-import os
+"""
+Performance Monitoring Module
+
+This module calculates performance metrics for user tasks based on feedback
+and provides functions to optimize prompt strategies based on those metrics.
+It handles both global and user-specific performance tracking.
+"""
+
 import time
 import uuid
-import mlflow
 import logging
 from datetime import datetime, timedelta
+
+import mlflow
 from google.cloud import logging as gcp_logging
+
 from db_connection import get_db_connection
 from config import GCP_PROJECT_ID
 from send_notification import send_email_notification
@@ -22,7 +31,12 @@ LOOKBACK_DAYS = 30  # Analyze feedback from the last 30 days
 def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
     """
     Calculate performance metrics per user for each task.
-    Returns a dictionary with user-specific performance scores.
+
+    Args:
+        lookback_days (int): Number of days to look back for feedback
+
+    Returns:
+        dict: Dictionary mapping users to task-specific performance scores
     """
     try:
         user_metrics = {}
@@ -43,6 +57,7 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
 
                 logging.info(f"Found {len(users)} users with feedback")
 
+                # For each user, calculate task-specific metrics
                 for user_email in users:
                     user_metrics[user_email] = {}
 
@@ -71,6 +86,7 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
                         positive_count = result["positive_count"] if result else 0
                         negative_count = result["negative_count"] if result else 0
 
+                        # Only calculate score if minimum feedback threshold met
                         if total_count >= MIN_FEEDBACK_COUNT:
                             performance_score = (
                                 positive_count / total_count if total_count > 0 else 0
@@ -79,6 +95,7 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
                             # Not enough feedback to make a determination
                             performance_score = None
 
+                        # Store metrics
                         user_metrics[user_email][task] = {
                             "total_feedback": total_count,
                             "positive_feedback": positive_count,
@@ -90,7 +107,7 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
                             ),
                         }
 
-                        # Log info about metrics - FIXED to handle None values
+                        # Log metrics
                         score_str = (
                             f"{performance_score:.2f}"
                             if performance_score is not None
@@ -123,6 +140,7 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
         return user_metrics
 
     except Exception as e:
+        # Handle calculation errors
         error_msg = f"Error calculating user performance metrics: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
@@ -132,8 +150,13 @@ def calculate_user_performance_metrics(lookback_days=LOOKBACK_DAYS):
 
 def get_user_prompt_strategies(user_email):
     """
-    Retrieve the user-specific prompt strategies from the user_prompt_strategies table.
-    Falls back to default strategies if no user-specific settings are found.
+    Retrieve the user-specific prompt strategies from the database.
+
+    Args:
+        user_email (str): User email to get strategies for
+
+    Returns:
+        dict: Dictionary mapping tasks to strategy types
     """
     try:
         with get_db_connection() as conn:
@@ -150,8 +173,8 @@ def get_user_prompt_strategies(user_email):
                 cur.execute(query, (user_email,))
                 result = cur.fetchone()
 
+                # Fall back to defaults if no user-specific settings
                 if not result:
-                    # Fall back to default strategies if no user-specific settings
                     default_strategies = {
                         "summary": "default",
                         "action_items": "default",
@@ -170,6 +193,7 @@ def get_user_prompt_strategies(user_email):
                     )
                     return default_strategies
 
+                # Convert database result to dictionary
                 strategies = {
                     "summary": result["summary_strategy"] or "default",
                     "action_items": result["action_items_strategy"] or "default",
@@ -189,10 +213,12 @@ def get_user_prompt_strategies(user_email):
                 return strategies
 
     except Exception as e:
+        # Handle retrieval errors
         error_msg = f"Error retrieving user prompt strategies: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
         logging.exception(e)  # Log full traceback
+
         # Fall back to default strategies
         return {
             "summary": "default",
@@ -217,6 +243,8 @@ def update_prompt_strategy(task, new_strategy, user_email):
         logging.info(
             f"Updating prompt strategy for {user_email} on {task} to {new_strategy}"
         )
+
+        # Validate inputs
         if not user_email:
             error_msg = "User email is required for strategy updates"
             gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
@@ -230,6 +258,7 @@ def update_prompt_strategy(task, new_strategy, user_email):
             "draft_reply": "draft_reply_strategy",
         }
 
+        # Validate task type
         if task not in column_mapping:
             error_msg = f"Invalid task type: {task}"
             gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
@@ -244,7 +273,7 @@ def update_prompt_strategy(task, new_strategy, user_email):
                 current_strategies = get_user_prompt_strategies(user_email)
                 old_strategy = current_strategies.get(task, "default")
 
-                # First check if user exists in user_prompt_strategies table
+                # Check if user exists in user_prompt_strategies table
                 cur.execute(
                     "SELECT COUNT(*) as count FROM user_prompt_strategies WHERE user_email = %s",
                     (user_email,),
@@ -322,6 +351,7 @@ def update_prompt_strategy(task, new_strategy, user_email):
                 conn.commit()
                 logging.info("Transaction committed")
 
+        # Log the update
         gcp_logger.log_struct(
             {
                 "message": f"Updated user-specific prompt strategy for {user_email} on {task}",
@@ -341,6 +371,7 @@ def update_prompt_strategy(task, new_strategy, user_email):
         }
 
     except Exception as e:
+        # Handle update errors
         error_msg = f"Error updating prompt strategy for {task}: {str(e)}"
         gcp_logger.log_struct({"message": error_msg}, severity="ERROR")
         logging.error(error_msg)
@@ -351,14 +382,13 @@ def update_prompt_strategy(task, new_strategy, user_email):
 def optimize_user_prompt_strategies(user_metrics=None, experiment_id=None):
     """
     Analyze user performance metrics and optimize prompt strategies where needed.
-    Only focuses on user-specific optimizations.
 
     Args:
-        user_metrics (dict, optional): User-specific metrics. If None, calculates them.
-        experiment_id (str, optional): MLflow experiment ID for logging.
+        user_metrics (dict, optional): User performance metrics (calculated if None)
+        experiment_id (str, optional): MLflow experiment ID for logging
 
     Returns:
-        dict: Results of the optimization process.
+        dict: Results of the optimization process
     """
     request_id = str(uuid.uuid4())
     start_time = time.time()
@@ -375,13 +405,24 @@ def optimize_user_prompt_strategies(user_metrics=None, experiment_id=None):
 
 
 def _run_optimization(user_metrics=None, request_id=None, experiment_id=None):
-    """Internal function to run the optimization process."""
+    """
+    Internal function to run the optimization process.
+
+    Args:
+        user_metrics (dict, optional): User performance metrics
+        request_id (str, optional): Request ID for correlation
+        experiment_id (str, optional): MLflow experiment ID
+
+    Returns:
+        dict: Optimization results
+    """
     try:
         # Calculate user metrics if not provided
         if user_metrics is None:
             logging.info("No metrics provided, calculating user metrics")
             user_metrics = calculate_user_performance_metrics()
 
+        # Validate metrics
         if not user_metrics:
             error_msg = "Failed to calculate user performance metrics or no users found"
             gcp_logger.log_struct(
@@ -425,7 +466,7 @@ def _run_optimization(user_metrics=None, request_id=None, experiment_id=None):
                     users_below_threshold[user_email].append(task)
                     logging.info(f"User {user_email} task {task} is below threshold")
 
-                    # Only change if we're not already using alternate
+                    # Only change if we're not already using alternate strategy
                     current_strategy = user_strategies.get(task, "default")
 
                     logging.info(
@@ -528,14 +569,14 @@ def _run_optimization(user_metrics=None, request_id=None, experiment_id=None):
                 severity="INFO",
             )
 
-            # In a production system, you would uncomment this to send actual email notifications
+            # In production, uncomment to send actual notifications
             # send_email_notification(
             #     "Performance Alert",
             #     "\n".join(notification_message),
             #     request_id
             # )
 
-        # Log result
+        # Prepare result
         logging.info(f"Optimization completed with {len(user_changes)} changes")
         result = {
             "success": True,
@@ -551,6 +592,7 @@ def _run_optimization(user_metrics=None, request_id=None, experiment_id=None):
         return result
 
     except Exception as e:
+        # Handle optimization errors
         error_msg = f"Error in prompt optimization: {str(e)}"
         gcp_logger.log_struct(
             {"message": error_msg, "request_id": request_id},

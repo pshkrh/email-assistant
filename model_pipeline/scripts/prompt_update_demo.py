@@ -7,14 +7,14 @@ user-specific strategy optimization. It shows how the system tracks metrics
 on a per-user basis and optimizes prompt strategies accordingly.
 """
 
-import requests
-import json
-import time
 import argparse
 import logging
+
+import requests
+import json
 from colorama import Fore, Style, init
 
-# Initialize colorama
+# Initialize colorama for colored output
 init()
 
 # Configure logging
@@ -28,12 +28,26 @@ LOCAL_BASE_URL = "http://localhost:8000"
 
 
 def print_json(json_data):
-    """Print JSON data in a formatted way"""
+    """
+    Print JSON data in a formatted way.
+
+    Args:
+        json_data (dict): JSON data to print
+    """
     print(json.dumps(json_data, indent=2))
 
 
 def check_user_performance(base_url, user_email=None):
-    """Test the performance check endpoint with user-specific metrics"""
+    """
+    Test the performance check endpoint with user-specific metrics.
+
+    Args:
+        base_url (str): Base URL of the API
+        user_email (str, optional): User email to check specifically
+
+    Returns:
+        dict: Performance metrics data
+    """
     logging.info(
         f"Checking performance metrics for {'all users' if user_email is None else user_email}..."
     )
@@ -130,6 +144,7 @@ def check_user_performance(base_url, user_email=None):
                     else:
                         print(f"    Status: {Fore.GREEN}✅ OK{Style.RESET_ALL}")
 
+        # Print current strategies
         print(f"\n{Fore.CYAN}=== CURRENT PROMPT STRATEGIES ==={Style.RESET_ALL}")
         print(f"\n{Fore.YELLOW}Global Strategies:{Style.RESET_ALL}")
         for task, strategy in data.get("global_strategies", {}).items():
@@ -146,6 +161,7 @@ def check_user_performance(base_url, user_email=None):
                     )
                     print(f"    {task}: {strategy_color}{strategy}{Style.RESET_ALL}")
 
+        # Print tasks below threshold
         if data.get("tasks_below_threshold"):
             print(
                 f"\n{Fore.RED}⚠️ Global tasks below threshold: {', '.join(data.get('tasks_below_threshold'))}{Style.RESET_ALL}"
@@ -167,7 +183,16 @@ def check_user_performance(base_url, user_email=None):
 
 
 def optimize_user_prompts(base_url, user_email=None):
-    """Test the prompt optimization endpoint with user-specific targeting"""
+    """
+    Test the prompt optimization endpoint with user-specific targeting.
+
+    Args:
+        base_url (str): Base URL of the API
+        user_email (str, optional): User email to optimize specifically
+
+    Returns:
+        dict: Optimization results
+    """
     logging.info(
         f"Triggering prompt optimization for {'all users' if user_email is None else user_email}..."
     )
@@ -258,7 +283,16 @@ def optimize_user_prompts(base_url, user_email=None):
 
 
 def get_optimization_history(base_url, user_email=None):
-    """Test the optimization history endpoint with user filtering"""
+    """
+    Test the optimization history endpoint with user filtering.
+
+    Args:
+        base_url (str): Base URL of the API
+        user_email (str, optional): User email to filter history by
+
+    Returns:
+        dict: Optimization history data
+    """
     logging.info(
         f"Retrieving optimization history for {'all users' if user_email is None else user_email}..."
     )
@@ -326,7 +360,16 @@ def get_optimization_history(base_url, user_email=None):
 
 
 def get_user_strategies(base_url, user_email):
-    """Test the user strategies endpoint"""
+    """
+    Test the user strategies endpoint.
+
+    Args:
+        base_url (str): Base URL of the API
+        user_email (str): User email to get strategies for
+
+    Returns:
+        dict: User strategies data
+    """
     if not user_email:
         logging.error("User email is required")
         return None
@@ -356,7 +399,12 @@ def get_user_strategies(base_url, user_email):
 
 
 def run_full_demo(base_url):
-    """Run through the full demonstration sequence"""
+    """
+    Run through the full demonstration sequence.
+
+    Args:
+        base_url (str): Base URL of the API
+    """
     print(
         f"\n{Fore.MAGENTA}======================================================{Style.RESET_ALL}"
     )
@@ -547,7 +595,11 @@ def run_full_demo(base_url):
 
 
 def main():
-    """Main entry point"""
+    """
+    Main entry point for the script.
+
+    Parses command line arguments and executes the appropriate action.
+    """
     parser = argparse.ArgumentParser(
         description="Demo for User-Specific Performance Monitoring"
     )

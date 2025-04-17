@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Initialize or reset the database schema for user-specific prompt strategies.
-This script creates the necessary tables and indexes if they don't exist,
-and can also reset the database by clearing existing data.
+Database Initialization Module
+
+This script initializes or resets the database schema for user-specific prompt strategies.
+It creates the necessary tables and indexes if they don't exist and can optionally
+reset the database by clearing existing data.
 """
 
-import os
 import sys
 import logging
 import argparse
-import psycopg2
-from psycopg2.extras import RealDictCursor
+
 from db_connection import get_db_connection, DB_CONFIG
 
 # Configure logging
@@ -20,7 +20,15 @@ logging.basicConfig(
 
 
 def reset_database(confirm=False):
-    """Reset the database by dropping and recreating tables, or truncating tables."""
+    """
+    Reset the database by dropping or truncating tables.
+
+    Args:
+        confirm (bool): Confirmation flag to proceed with reset
+
+    Returns:
+        bool: True if reset successful, False otherwise
+    """
     if not confirm:
         logging.warning(
             "Database reset requires confirmation. Use --reset-confirmed flag."
@@ -48,8 +56,7 @@ def reset_database(confirm=False):
                 """
                 )
 
-                # We don't reset all user_feedback as it contains valuable historical data
-                # Just update the strategy-related columns to default for remaining users
+                # Reset strategy columns for remaining users
                 logging.info("Resetting strategy columns in user_feedback table...")
                 cur.execute(
                     """
@@ -71,7 +78,12 @@ def reset_database(confirm=False):
 
 
 def create_user_prompt_strategies_table():
-    """Create user_prompt_strategies table if it doesn't exist."""
+    """
+    Create user_prompt_strategies table if it doesn't exist.
+
+    Returns:
+        bool: True if creation successful, False otherwise
+    """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -90,7 +102,7 @@ def create_user_prompt_strategies_table():
                 """
                 )
 
-                # Create indexes
+                # Create indexes for performance
                 cur.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_user_prompt_strategies_email 
@@ -105,7 +117,7 @@ def create_user_prompt_strategies_table():
                 """
                 )
 
-                # Add comments
+                # Add documentation comments
                 cur.execute(
                     """
                     COMMENT ON TABLE user_prompt_strategies IS 
@@ -124,7 +136,12 @@ def create_user_prompt_strategies_table():
 
 
 def modify_prompt_strategy_changes_table():
-    """Modify prompt_strategy_changes table to track only user-specific changes."""
+    """
+    Modify prompt_strategy_changes table to track user-specific changes.
+
+    Returns:
+        bool: True if modification successful, False otherwise
+    """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -180,7 +197,7 @@ def modify_prompt_strategy_changes_table():
                             "Added user_email column to prompt_strategy_changes table"
                         )
 
-                # Create index for user_email
+                # Create index for user_email (query performance)
                 cur.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_prompt_strategy_changes_user 
@@ -188,7 +205,7 @@ def modify_prompt_strategy_changes_table():
                 """
                 )
 
-                # Create index for timestamp
+                # Create index for timestamp (sorting)
                 cur.execute(
                     """
                     CREATE INDEX IF NOT EXISTS idx_prompt_strategy_changes_timestamp 
@@ -206,7 +223,12 @@ def modify_prompt_strategy_changes_table():
 
 
 def initialize_sample_user_strategies():
-    """Initialize strategies for a fixed set of sample users."""
+    """
+    Initialize strategies for a set of sample users.
+
+    Returns:
+        bool: True if initialization successful, False otherwise
+    """
     try:
         # Fixed set of sample users that will always be initialized
         sample_users = [
@@ -253,7 +275,12 @@ def initialize_sample_user_strategies():
 
 
 def main():
-    """Main function to initialize or reset the database."""
+    """
+    Main function to initialize or reset the database.
+
+    Returns:
+        bool: True if initialization successful, False otherwise
+    """
     parser = argparse.ArgumentParser(description="Initialize or reset database schema")
     parser.add_argument(
         "--reset", action="store_true", help="Reset the database before initialization"

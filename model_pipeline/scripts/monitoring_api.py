@@ -1,12 +1,19 @@
-import os
-import json
+"""
+Monitoring API Module
+
+This module implements API endpoints for monitoring and optimizing prompt strategies
+based on user feedback. It provides endpoints for checking performance metrics,
+triggering optimization, and viewing optimization history.
+"""
+
 import uuid
 import time
 import logging
 from datetime import datetime
+
 from flask import jsonify, request
-import mlflow
 from google.cloud import logging as gcp_logging
+
 from performance_monitor import (
     calculate_user_performance_metrics,
     get_user_prompt_strategies,
@@ -28,6 +35,9 @@ def register_monitoring_endpoints(app):
     """
     Register monitoring endpoints with the Flask app.
 
+    This function adds performance monitoring and prompt optimization
+    endpoints to the provided Flask application.
+
     Args:
         app: Flask application instance
     """
@@ -35,8 +45,12 @@ def register_monitoring_endpoints(app):
     @app.route("/check_performance", methods=["GET"])
     def check_performance():
         """
-        Manual endpoint to check current performance metrics.
-        Returns performance metrics without making any changes.
+        Check current performance metrics without making changes.
+
+        Endpoint to check performance metrics globally or for a specific user.
+
+        Returns:
+            Response: JSON with performance metrics
         """
         request_id = str(uuid.uuid4())
         start_time = time.time()
@@ -47,9 +61,10 @@ def register_monitoring_endpoints(app):
         )
 
         try:
-            # If user_email is provided as a query parameter, get user-specific metrics
+            # Get user_email from query parameter (if provided)
             user_email = request.args.get("user_email")
 
+            # Get metrics based on scope (specific user or all users)
             if user_email:
                 # Get metrics for a specific user
                 user_metrics = {}
@@ -60,6 +75,7 @@ def register_monitoring_endpoints(app):
                 # Get metrics for all users
                 user_metrics = calculate_user_performance_metrics()
 
+            # Handle calculation failure
             if not user_metrics:
                 return (
                     jsonify(
@@ -71,7 +87,7 @@ def register_monitoring_endpoints(app):
                     500,
                 )
 
-            # Prepare users/tasks that need attention
+            # Identify users/tasks below threshold
             users_below_threshold = {}
             if user_metrics:
                 for email, tasks in user_metrics.items():
@@ -91,6 +107,7 @@ def register_monitoring_endpoints(app):
                 for email in user_metrics.keys():
                     user_strategies[email] = get_user_prompt_strategies(email)
 
+            # Prepare response
             response = {
                 "success": True,
                 "user_metrics": user_metrics,
@@ -99,7 +116,7 @@ def register_monitoring_endpoints(app):
                 "timestamp": datetime.now().isoformat(),
             }
 
-            # Log metrics to GCP
+            # Log completion
             gcp_logger.log_struct(
                 {
                     "message": "Performance check completed",
@@ -113,6 +130,7 @@ def register_monitoring_endpoints(app):
             return jsonify(response)
 
         except Exception as e:
+            # Handle errors
             error_msg = f"Error checking performance: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
@@ -124,8 +142,13 @@ def register_monitoring_endpoints(app):
     @app.route("/optimize_prompts", methods=["POST"])
     def optimize_prompts():
         """
-        Manual endpoint to trigger prompt optimization based on performance metrics.
-        Will make changes to prompt strategies if performance is below threshold.
+        Trigger prompt optimization based on performance metrics.
+
+        Endpoint to optimize prompt strategies for users with below-threshold performance.
+        Can be targeted to a specific user or all users.
+
+        Returns:
+            Response: JSON with optimization results
         """
         request_id = str(uuid.uuid4())
         start_time = time.time()
@@ -139,25 +162,26 @@ def register_monitoring_endpoints(app):
         )
 
         try:
-            # Check if optimization should be limited to a specific user
+            # Check if optimization is for a specific user
             data = request.get_json() or {}
             user_email = data.get("user_email")
             logging.info(
                 f"Optimizing prompts for {'specific user: ' + user_email if user_email else 'all users'}"
             )
 
-            # Direct database optimization approach
+            # Track changes made during optimization
             changes_made = []
             users_below_threshold = {}
 
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    # Query to find users with performance below threshold
+                    # For each task type, find users with below-threshold performance
                     for task in ["summary", "action_items", "draft_reply"]:
                         feedback_column = f"{task}_feedback"
 
-                        # Get user query based on whether we're optimizing a specific user or all users
+                        # Query based on optimization scope
                         if user_email:
+                            # Specific user query
                             query = f"""
                                 SELECT 
                                     user_email,
@@ -171,6 +195,7 @@ def register_monitoring_endpoints(app):
                             """
                             cur.execute(query, (user_email,))
                         else:
+                            # All users query
                             query = f"""
                                 SELECT 
                                     user_email,
@@ -184,6 +209,7 @@ def register_monitoring_endpoints(app):
                             """
                             cur.execute(query)
 
+                        # Process users with low performance
                         users_with_low_performance = cur.fetchall()
                         logging.info(
                             f"Found {len(users_with_low_performance)} users with low performance on {task}"
@@ -284,7 +310,7 @@ def register_monitoring_endpoints(app):
                     # Commit all changes
                     conn.commit()
 
-            # Log result
+            # Prepare response
             logging.info(f"Optimization completed with {len(changes_made)} changes")
             result = {
                 "success": True,
@@ -293,7 +319,7 @@ def register_monitoring_endpoints(app):
                 "timestamp": datetime.now().isoformat(),
             }
 
-            # Log result
+            # Log completion
             gcp_logger.log_struct(
                 {
                     "message": "Prompt optimization completed",
@@ -308,6 +334,7 @@ def register_monitoring_endpoints(app):
             return jsonify(result)
 
         except Exception as e:
+            # Handle errors
             error_msg = f"Error optimizing prompts: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
@@ -320,7 +347,12 @@ def register_monitoring_endpoints(app):
     def scheduled_check():
         """
         Endpoint for Cloud Scheduler to trigger automated performance checks.
-        This endpoint can be called by a Cloud Scheduler job.
+
+        This endpoint runs performance checks and optimizes strategies automatically.
+        Intended to be called by a Cloud Scheduler job on a regular schedule.
+
+        Returns:
+            Response: JSON with check results
         """
         request_id = str(uuid.uuid4())
         start_time = time.time()
@@ -335,16 +367,17 @@ def register_monitoring_endpoints(app):
         )
 
         try:
-            # Direct database optimization approach
+            # Track changes made during optimization
             changes_made = []
             users_below_threshold = {}
 
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    # Query to find users with performance below threshold
+                    # For each task type, find users with below-threshold performance
                     for task in ["summary", "action_items", "draft_reply"]:
                         feedback_column = f"{task}_feedback"
 
+                        # Query for users with low performance across all users
                         query = f"""
                             SELECT 
                                 user_email,
@@ -358,6 +391,7 @@ def register_monitoring_endpoints(app):
                         """
                         cur.execute(query)
 
+                        # Process users with low performance
                         users_with_low_performance = cur.fetchall()
                         logging.info(
                             f"Found {len(users_with_low_performance)} users with low performance on {task}"
@@ -458,7 +492,7 @@ def register_monitoring_endpoints(app):
                     # Commit all changes
                     conn.commit()
 
-            # Log result
+            # Prepare response
             logging.info(
                 f"Scheduled optimization completed with {len(changes_made)} changes"
             )
@@ -469,7 +503,7 @@ def register_monitoring_endpoints(app):
                 "timestamp": datetime.now().isoformat(),
             }
 
-            # Log result
+            # Log completion
             gcp_logger.log_struct(
                 {
                     "message": "Scheduled check completed",
@@ -484,6 +518,7 @@ def register_monitoring_endpoints(app):
             return jsonify(result)
 
         except Exception as e:
+            # Handle errors
             error_msg = f"Error in scheduled check: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
@@ -496,7 +531,11 @@ def register_monitoring_endpoints(app):
     def get_optimization_history():
         """
         Retrieve the history of prompt strategy changes.
-        Optionally filter by user_email.
+
+        Endpoint to get history of strategy changes, optionally filtered by user.
+
+        Returns:
+            Response: JSON with optimization history
         """
         request_id = str(uuid.uuid4())
         user_email = request.args.get("user_email")
@@ -540,6 +579,7 @@ def register_monitoring_endpoints(app):
                 change_dict["scope"] = "user-specific"
                 history.append(change_dict)
 
+            # Log completion
             gcp_logger.log_struct(
                 {
                     "message": "Retrieved optimization history",
@@ -553,6 +593,7 @@ def register_monitoring_endpoints(app):
             return jsonify({"success": True, "history": history})
 
         except Exception as e:
+            # Handle errors
             error_msg = f"Error retrieving optimization history: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
@@ -565,6 +606,11 @@ def register_monitoring_endpoints(app):
     def get_user_strategies():
         """
         Retrieve the current prompt strategies for a specific user.
+
+        Endpoint to get a user's current strategy settings.
+
+        Returns:
+            Response: JSON with user strategies
         """
         request_id = str(uuid.uuid4())
         user_email = request.args.get("user_email")
@@ -573,8 +619,10 @@ def register_monitoring_endpoints(app):
             return jsonify({"success": False, "message": "User email is required"}), 400
 
         try:
+            # Get strategies from database helper
             strategies = get_user_prompt_strategies(user_email)
 
+            # Log completion
             gcp_logger.log_struct(
                 {
                     "message": f"Retrieved user strategies for {user_email}",
@@ -590,6 +638,7 @@ def register_monitoring_endpoints(app):
             )
 
         except Exception as e:
+            # Handle errors
             error_msg = f"Error retrieving user strategies: {str(e)}"
             gcp_logger.log_struct(
                 {"message": error_msg, "request_id": request_id}, severity="ERROR"
