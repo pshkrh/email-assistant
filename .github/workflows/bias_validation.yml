@@ -15,6 +15,7 @@ jobs:
     env:
       GITHUB_ACTIONS: true
       GCP_GMAIL_SA_KEY_JSON: ${{ secrets.GCP_GMAIL_SA_KEY_JSON }}
+      GCP_DVC_SA_KEY_JSON: ${{ secrets.GCP_DVC_SA_KEY_JSON }}
       NOTIFICATION_SENDER_EMAIL: ${{ secrets.NOTIFICATION_SENDER_EMAIL }}
       NOTIFICATION_RECIPIENT_EMAIL: ${{ secrets.NOTIFICATION_RECIPIENT_EMAIL }}
       GCP_PROJECT_ID: email-assistant-449706
@@ -41,6 +42,24 @@ jobs:
       - name: Download SpaCy model
         run: |
           python -m spacy download en_core_web_sm
+
+      - name: Decode GCP service account key for DVC
+        run: |
+          echo "$GCP_DVC_SA_KEY_JSON" > gcp-dvc-sa.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${PWD}/gcp-dvc-sa.json" >> $GITHUB_ENV
+
+      - name: Pull data from DVC (GCS)
+        run: |
+          pip install dvc[gs]
+
+      - name: Configure DVC remote
+        run: |
+          dvc remote add -d myremote gs://mail_mate || echo "Remote already exists"
+          dvc remote modify myremote credentialpath gcp-dvc-sa.json
+
+      - name: Pull DVC data
+        run: |
+          dvc pull data_pipeline/data/enron_emails.csv.dvc
 
       - name: Run Validation
         run: |
