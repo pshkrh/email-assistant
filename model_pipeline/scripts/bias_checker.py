@@ -294,7 +294,7 @@ def create_fairlearn_visualizations(merged_df, task, experiment_id):
             )
         plt.close()
 
-        # Calculate and log the disparity metrics - fixed for Fairlearn 0.12.0
+        # Calculate and log the disparity metrics
         group_disparity = metric_frame.difference()
 
         # Extract the metrics you want
