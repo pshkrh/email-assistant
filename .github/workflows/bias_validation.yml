@@ -1,6 +1,7 @@
 name: Run Bias + Validation Checks
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - model-deployment
