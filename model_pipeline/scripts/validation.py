@@ -10,6 +10,7 @@ from collections import defaultdict
 import mlflow
 from mlflow_config import configure_mlflow
 from transformers import logging as hf_logging
+from send_notification import send_email_notification
 
 hf_logging.set_verbosity_error()
 
@@ -159,14 +160,20 @@ def run_validation(predicted_csv_path, labeled_csv_path):
         predicted_df = pd.read_csv(predicted_csv_path)
         labeled_df = pd.read_csv(labeled_csv_path)
 
-        print("\n🚀 Starting validation...")
         metrics = validate_outputs(predicted_df, labeled_df)
+
+        alert_triggered = False
+        alert_messages = []
 
         for task in metrics:
             for threshold, scores in metrics[task].items():
-                print(
-                    f"Threshold {threshold:.2f} => Precision: {scores['precision']:.2f}, Recall: {scores['recall']:.2f}, F1: {scores['f1']:.2f}, Accuracy: {scores['accuracy']:.2f}"
-                )
+
+                # Alert condition
+                if scores["f1"] < 85.0:
+                    alert_triggered = True
+                    alert_messages.append(
+                        f"⚠️ F1 for {task} at threshold {threshold:.2f} is {scores['f1']:.2f} (below 85.0)"
+                    )
 
         mlflow.log_dict(metrics, "task_validation_metrics.json")
 
@@ -183,6 +190,14 @@ def run_validation(predicted_csv_path, labeled_csv_path):
                 "tfidf_skipped_inputs.json",
             )
             mlflow.log_metric("tfidf_skipped_count", len(tfidf_invalid_examples))
+
+        # if alert_triggered:
+        alert_body = "\n".join(alert_messages)
+        send_email_notification(
+            error_type="ValidationThresholdAlert",
+            error_message=alert_body,
+            request_id="validation_run",
+        )
 
         return metrics
 

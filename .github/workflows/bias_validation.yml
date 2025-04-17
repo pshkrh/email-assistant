@@ -1,0 +1,40 @@
+name: Run Bias + Validation Checks
+
+on:
+  push:
+    branches:
+      - model-deployment
+    paths:
+      - "model_pipeline/scripts/**"
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_ACTIONS: true
+      GCP_GMAIL_SA_KEY_JSON: ${{ secrets.GCP_GMAIL_SA_KEY_JSON }}
+      NOTIFICATION_SENDER_EMAIL: ${{ secrets.NOTIFICATION_SENDER_EMAIL }}
+      NOTIFICATION_RECIPIENT_EMAIL: ${{ secrets.NOTIFICATION_RECIPIENT_EMAIL }}
+      GCP_PROJECT_ID: email-assistant-449706
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      - name: Install dependencies
+        run: |
+          pip install -r model_pipeline/requirements.txt
+
+      - name: Run Validation
+        run: |
+          python model_pipeline/scripts/validation.py
+
+      - name: Run Bias Checker
+        run: |
+          python model_pipeline/scripts/bias_checker.py

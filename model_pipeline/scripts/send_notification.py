@@ -1,6 +1,7 @@
 import os
 import base64
 import time
+import json
 from email.mime.text import MIMEText
 from googleapiclient.discovery import build
 from google.cloud import logging as gcp_logging
@@ -20,6 +21,8 @@ if IN_CLOUD_RUN:
 gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
 gcp_logger = gcp_client.logger("notification_sender")
 
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+
 
 def send_email_notification(error_type, error_message, request_id=None):
     """Send an email notification for a failure."""
@@ -30,6 +33,10 @@ def send_email_notification(error_type, error_message, request_id=None):
                 GCP_PROJECT_ID, GMAIL_NOTIFICATION_SECRET_ID
             )
             credentials = Credentials.from_authorized_user_info(creds_dict)
+        elif IN_GITHUB_ACTIONS:
+            creds_b64 = os.getenv("GCP_GMAIL_SA_KEY_JSON")
+            creds_json = base64.b64decode(creds_b64).decode("utf-8")
+            creds_dict = json.loads(creds_json)
         else:
             raise NotImplementedError(
                 "Local credential loading not supported in production"

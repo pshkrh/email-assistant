@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import mlflow
+from send_notification import send_email_notification
 
 from mlflow_config import configure_mlflow
 
@@ -66,14 +67,9 @@ def extract_named_entities(text):
 
 def compute_bert_score(pred_text, true_text, model_type="roberta-large"):
     if not isinstance(true_text, str) and not isinstance(pred_text, str):
-        # print(f"{true_text} -> {pred_text}....")
         return 1.0, 1.0, 1.0
     pred_text = str(pred_text) if isinstance(pred_text, str) else ""
     true_text = str(true_text) if isinstance(true_text, str) else ""
-
-    # if not true_text.strip():
-    #     print(f"{true_text} -> {pred_text}")
-    #     # return 1.0, 1.0, 1.0
 
     P, R, F1 = score([pred_text], [true_text], model_type=model_type, verbose=False)
     return float(P[0]), float(R[0]), float(F1[0])
@@ -141,8 +137,9 @@ def check_bias(labeled_df, predicted_df):
     }
 
     failure_cases = []
+    alert_triggered = False
+    alert_messages = []
     for task in tasks:
-        print(f"\n=== Evaluating Task: {task.upper()} ===")
         y_true_col = f"{task}_true"
         y_pred_col = f"{task}_pred"
 
@@ -234,8 +231,19 @@ def check_bias(labeled_df, predicted_df):
                         ],
                     }
                     mlflow.log_dict(gap_info, f"accuracy_gap_{task}_{slice_type}.json")
+                    alert_triggered = True
+                    alert_msg = f"⚠️ Accuracy gap {acc_gap:.2f} in task '{task}' across {slice_type} slices"
+                    alert_messages.append(alert_msg)
 
             mlflow.log_dict(results, f"bias_results_{task}_{slice_type}.json")
+
+        # if alert_triggered:
+        alert_body = "\n".join(alert_messages)
+        send_email_notification(
+            error_type="BiasAlert",
+            error_message=alert_body,
+            request_id="bias_checker",
+        )
 
     pd.DataFrame(failure_cases).to_csv("failure_cases.csv", index=False)
     mlflow.log_artifact("failure_cases.csv")
@@ -247,10 +255,6 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
     with mlflow.start_run(
         nested=True, experiment_id=experiment_id, run_name="bias_checker_run"
     ):
-        print("MLflow run started:", mlflow.active_run().info.run_id)
-        print("Tracking URI:", mlflow.get_tracking_uri())
-        print("Experiment ID:", experiment_id)
-        print("Experiment Name:", mlflow.get_experiment(experiment_id).name)
         mlflow.log_param("predicted_csv_path", predicted_csv_path)
         mlflow.log_param("labeled_csv_path", labeled_csv_path)
         mlflow.log_param("enron_csv_path", enron_csv_path)
@@ -279,7 +283,6 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
             if missing:
                 raise ValueError(f"Missing columns in {name} CSV: {missing}")
 
-        print("Filtering out rows with no action items...")
         predicted_df = remove_no_action_items(predicted_df)
         labeled_df = remove_no_action_items(labeled_df)
 
@@ -287,6 +290,4 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
 
 
 if __name__ == "__main__":
-    # LABELED_SAMPLE_CSV_PATH
-    # P2 = "model_pipeline/data/predicted_from_labeled_v11.csv"
     main(PREDICTED_SAMPLE_CSV_PATH, LABELED_SAMPLE_CSV_PATH)
