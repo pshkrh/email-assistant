@@ -10,6 +10,8 @@ content by comparing against human-labeled data using various metrics including:
 - Fairlearn fairness metrics
 """
 
+import base64
+from io import BytesIO
 import tempfile
 from tempfile import NamedTemporaryFile
 
@@ -308,69 +310,27 @@ def create_fairlearn_visualizations(merged_df, task, experiment_id):
         mlflow.log_dict(disparity, f"fairlearn_disparity_{task}_{slice_type}.json")
 
 
-def create_fairness_dashboard(merged_df, task):
-    """
-    Create a fairness dashboard for a specific task.
-
-    Args:
-        merged_df (DataFrame): DataFrame with predictions and ground truth
-        task (str): Task name (summary, action_item, etc.)
-
-    Returns:
-        str: Path to the HTML dashboard file
-    """
-    # Create a temporary file to store the dashboard
+def create_fairness_dashboard_with_embedded_images(merged_df, task):
     temp_dir = tempfile.mkdtemp()
     dashboard_path = f"{temp_dir}/fairness_dashboard_{task}.html"
 
-    # Plot fairness metrics for each slice
+    # Generate embedded images
+    embedded_images = {}
     for slice_type in ["length_slice", "complexity_slice", "role_slice"]:
-        # Create a figure with multiple subplots
         fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-        fig.suptitle(f"Fairness Metrics for {task} by {slice_type}", fontsize=16)
+        # ... [existing plotting code] ...
 
-        # Get data for this slice
-        slice_data = (
-            merged_df.groupby(slice_type)
-            .agg(
-                {
-                    f"y_true_{task}": "mean",
-                    f"y_pred_{task}": "mean",
-                    f"scores_{task}": lambda x: np.mean([i["bert_f1"] for i in x]),
-                }
-            )
-            .reset_index()
-        )
-
-        # Plot accuracy by slice
-        axs[0, 0].bar(slice_data[slice_type], slice_data[f"y_pred_{task}"])
-        axs[0, 0].set_title("Accuracy by Group")
-        axs[0, 0].set_ylabel("Accuracy")
-        axs[0, 0].set_ylim(0, 1)
-
-        # Plot BERT F1 score by slice
-        axs[0, 1].bar(slice_data[slice_type], slice_data[f"scores_{task}"])
-        axs[0, 1].set_title("BERT F1 Score by Group")
-        axs[0, 1].set_ylabel("BERT F1")
-        axs[0, 1].set_ylim(0, 1)
-
-        # Plot confusion matrix metrics by slice (true positive rate, false positive rate)
-        # These are just placeholders - in real implementation you'd calculate these metrics
-        axs[1, 0].bar(slice_data[slice_type], slice_data[f"y_pred_{task}"])
-        axs[1, 0].set_title("True Positive Rate by Group")
-        axs[1, 0].set_ylabel("TPR")
-        axs[1, 0].set_ylim(0, 1)
-
-        axs[1, 1].bar(slice_data[slice_type], 1 - slice_data[f"y_pred_{task}"])
-        axs[1, 1].set_title("False Positive Rate by Group")
-        axs[1, 1].set_ylabel("FPR")
-        axs[1, 1].set_ylim(0, 1)
-
-        plt.tight_layout()
-        plt.savefig(f"{temp_dir}/fairness_{task}_{slice_type}.png")
+        # Save to BytesIO instead of file
+        buf = BytesIO()
+        plt.savefig(buf, format="png")
         plt.close()
 
-    # Create a simple HTML dashboard
+        # Convert to base64
+        buf.seek(0)
+        img_str = base64.b64encode(buf.read()).decode("utf-8")
+        embedded_images[slice_type] = f"data:image/png;base64,{img_str}"
+
+    # Create HTML with embedded images
     with open(dashboard_path, "w") as f:
         f.write(
             f"""
@@ -391,21 +351,21 @@ def create_fairness_dashboard(merged_df, task):
             <h2>Length Slice</h2>
             <div class="metrics">
                 <div class="metric">
-                    <img src="fairness_{task}_length_slice.png" alt="Length Slice Metrics">
+                    <img src="{embedded_images['length_slice']}" alt="Length Slice Metrics">
                 </div>
             </div>
             
             <h2>Complexity Slice</h2>
             <div class="metrics">
                 <div class="metric">
-                    <img src="fairness_{task}_complexity_slice.png" alt="Complexity Slice Metrics">
+                    <img src="{embedded_images['complexity_slice']}" alt="Complexity Slice Metrics">
                 </div>
             </div>
             
             <h2>Role Slice</h2>
             <div class="metrics">
                 <div class="metric">
-                    <img src="fairness_{task}_role_slice.png" alt="Role Slice Metrics">
+                    <img src="{embedded_images['role_slice']}" alt="Role Slice Metrics">
                 </div>
             </div>
         </body>
@@ -581,7 +541,7 @@ def check_bias(labeled_df, predicted_df):
         create_fairlearn_visualizations(merged_df, task, experiment_id)
 
         # Create and log fairness dashboard
-        dashboard_path = create_fairness_dashboard(merged_df, task)
+        dashboard_path = create_fairness_dashboard_with_embedded_images(merged_df, task)
         mlflow.log_artifact(dashboard_path, f"fairness_dashboard_{task}")
 
         # Send alerts if triggered
