@@ -1,0 +1,32 @@
+# Core data science
+numpy
+pandas
+
+# NLP and similarity scoring
+spacy==3.8.3
+nltk
+rouge-score
+bert-score
+
+# Evaluation metrics
+scikit-learn
+
+# Logging and email notification (GCP + Gmail API)
+google-auth-oauthlib
+google-api-python-client
+google-cloud-secret-manager==2.20.0
+google-cloud-logging==3.10.0
+
+# Experiment tracking
+mlflow==2.16.2
+
+# Visualization (optional, only used if you re-enable plotting)
+matplotlib
+seaborn
+
+# Optional: For psycopg2 if you later log to a DB from validation
+# psycopg2-binary
+
+# Optional: Needed only if Flask API or other scripts are run
+# flask
+# flask_cors

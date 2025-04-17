@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r model_pipeline/requirements.txt
+          pip install --upgrade --prefer-binary -r model_pipeline/bias_validation_requirements.txt
 
       - name: Run Validation
         run: |
