@@ -294,20 +294,15 @@ def create_fairlearn_visualizations(merged_df, task, experiment_id):
             )
         plt.close()
 
-        # Calculate and log the disparity metrics
+        # Calculate and log the disparity metrics - fixed for Fairlearn 0.12.0
+        group_disparity = metric_frame.difference()
+
+        # Extract the metrics you want
         disparity = {
-            "accuracy": metric_frame.difference(
-                method="between_groups", metrics="accuracy"
-            ),
-            "selection_rate": metric_frame.difference(
-                method="between_groups", metrics="selection_rate"
-            ),
-            "false_positive_rate": metric_frame.difference(
-                method="between_groups", metrics="false_positive_rate"
-            ),
-            "false_negative_rate": metric_frame.difference(
-                method="between_groups", metrics="false_negative_rate"
-            ),
+            "accuracy": float(group_disparity["accuracy"]),
+            "selection_rate": float(group_disparity["selection_rate"]),
+            "false_positive_rate": float(group_disparity["false_positive_rate"]),
+            "false_negative_rate": float(group_disparity["false_negative_rate"]),
         }
 
         mlflow.log_dict(disparity, f"fairlearn_disparity_{task}_{slice_type}.json")
