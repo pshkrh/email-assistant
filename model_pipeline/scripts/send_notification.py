@@ -72,8 +72,9 @@ def send_email_notification(error_type, error_message, request_id=None):
         message["subject"] = subject
 
         # Encode and send
+        user_id = sender if IN_GITHUB_ACTIONS else "me"
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        service.users().messages().send(userId=user_id, body={"raw": raw}).execute()
 
         if IN_CLOUD_RUN:
             gcp_logger.log_struct(

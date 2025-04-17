@@ -23,6 +23,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Cache Hugging Face models
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
