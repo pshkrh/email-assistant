@@ -19,6 +19,7 @@ jobs:
       NOTIFICATION_SENDER_EMAIL: ${{ secrets.NOTIFICATION_SENDER_EMAIL }}
       NOTIFICATION_RECIPIENT_EMAIL: ${{ secrets.NOTIFICATION_RECIPIENT_EMAIL }}
       GCP_PROJECT_ID: email-assistant-449706
+      MLFLOW_TRACKING_URI: https://mlflow-server-673808915782.us-central1.run.app
 
     steps:
       - name: Checkout code

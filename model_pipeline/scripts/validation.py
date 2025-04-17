@@ -195,13 +195,13 @@ def run_validation(predicted_csv_path, labeled_csv_path):
             )
             mlflow.log_metric("tfidf_skipped_count", len(tfidf_invalid_examples))
 
-        # if alert_triggered:
-        alert_body = "\n".join(alert_messages)
-        send_email_notification(
-            error_type="ValidationThresholdAlert",
-            error_message=alert_body,
-            request_id="validation_run",
-        )
+        if alert_triggered:
+            alert_body = "\n".join(alert_messages)
+            send_email_notification(
+                error_type="ValidationThresholdAlert",
+                error_message=alert_body,
+                request_id="validation_run",
+            )
 
         return metrics
 

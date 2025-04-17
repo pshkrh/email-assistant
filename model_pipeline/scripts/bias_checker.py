@@ -237,13 +237,13 @@ def check_bias(labeled_df, predicted_df):
 
             mlflow.log_dict(results, f"bias_results_{task}_{slice_type}.json")
 
-        # if alert_triggered :
-        alert_body = "\n".join(alert_messages)
-        send_email_notification(
-            error_type="BiasAlert",
-            error_message=alert_body,
-            request_id="bias_checker",
-        )
+        if alert_triggered:
+            alert_body = "\n".join(alert_messages)
+            send_email_notification(
+                error_type="BiasAlert",
+                error_message=alert_body,
+                request_id="bias_checker",
+            )
 
     pd.DataFrame(failure_cases).to_csv("failure_cases.csv", index=False)
     mlflow.log_artifact("failure_cases.csv")
