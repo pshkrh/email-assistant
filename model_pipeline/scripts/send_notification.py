@@ -40,7 +40,9 @@ def send_email_notification(error_type, error_message, request_id=None):
             creds_dict = json.loads(creds_json)
 
             credentials = service_account.Credentials.from_service_account_info(
-                creds_dict, scopes=["https://www.googleapis.com/auth/gmail.send"]
+                creds_dict,
+                scopes=["https://www.googleapis.com/auth/gmail.send"],
+                subject=sender,
             )
         else:
             raise NotImplementedError(
