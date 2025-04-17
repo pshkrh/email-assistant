@@ -42,8 +42,11 @@ if IN_CLOUD_RUN:
 # Load environment variables
 load_dotenv(dotenv_path=MODEL_ENV_PATH)
 
+# Check if running in GitHub Actions
+IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
+
 # Initialize credentials based on environment
-if IN_CLOUD_RUN:
+if IN_CLOUD_RUN or IN_GITHUB_ACTIONS:
     creds_dict = get_credentials_from_secret(
         GCP_PROJECT_ID, SERVICE_ACCOUNT_SECRET_ID, save_to_file=SERVICE_ACCOUNT_FILE
     )
