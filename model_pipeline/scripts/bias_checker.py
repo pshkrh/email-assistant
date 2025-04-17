@@ -255,6 +255,10 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
     with mlflow.start_run(
         nested=True, experiment_id=experiment_id, run_name="bias_checker_run"
     ):
+        backend_uri = mlflow.get_tracking_uri()
+        print(f"✅ MLflow Tracking URI: {backend_uri}")
+        print(f"📌 MLflow Run ID: {mlflow.active_run().info.run_id}")
+        print(f"🔗 View locally: mlflow ui --backend-store-uri '{backend_uri}'")
         mlflow.log_param("predicted_csv_path", predicted_csv_path)
         mlflow.log_param("labeled_csv_path", labeled_csv_path)
         mlflow.log_param("enron_csv_path", enron_csv_path)

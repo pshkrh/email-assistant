@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 from googleapiclient.discovery import build
 from google.cloud import logging as gcp_logging
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 from config import (
     IN_CLOUD_RUN,
@@ -37,6 +38,10 @@ def send_email_notification(error_type, error_message, request_id=None):
             creds_b64 = os.getenv("GCP_GMAIL_SA_KEY_JSON")
             creds_json = base64.b64decode(creds_b64).decode("utf-8")
             creds_dict = json.loads(creds_json)
+
+            credentials = service_account.Credentials.from_service_account_info(
+                creds_dict, scopes=["https://www.googleapis.com/auth/gmail.send"]
+            )
         else:
             raise NotImplementedError(
                 "Local credential loading not supported in production"
