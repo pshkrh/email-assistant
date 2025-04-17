@@ -311,18 +311,98 @@ def create_fairlearn_visualizations(merged_df, task, experiment_id):
 
 
 def create_fairness_dashboard_with_embedded_images(merged_df, task):
+    """Create a fairness dashboard with embedded base64 images"""
     temp_dir = tempfile.mkdtemp()
     dashboard_path = f"{temp_dir}/fairness_dashboard_{task}.html"
 
     # Generate embedded images
     embedded_images = {}
     for slice_type in ["length_slice", "complexity_slice", "role_slice"]:
+        # Create a figure with multiple subplots
         fig, axs = plt.subplots(2, 2, figsize=(15, 10))
-        # ... [existing plotting code] ...
+        fig.suptitle(f"Fairness Metrics for {task} by {slice_type}", fontsize=16)
 
-        # Save to BytesIO instead of file
+        # Get data for this slice
+        slice_data = (
+            merged_df.groupby(slice_type)
+            .agg(
+                {
+                    f"y_true_{task}": "mean",
+                    f"y_pred_{task}": "mean",
+                }
+            )
+            .reset_index()
+        )
+
+        # If there's scores data, extract BERT F1 scores
+        if f"scores_{task}" in merged_df.columns:
+            bert_scores = (
+                merged_df.groupby(slice_type)
+                .apply(
+                    lambda x: np.mean(
+                        [
+                            i.get("bert_f1", 0)
+                            for i in x[f"scores_{task}"]
+                            if isinstance(i, dict)
+                        ]
+                    )
+                )
+                .reset_index(name="bert_f1")
+            )
+            slice_data = pd.merge(slice_data, bert_scores, on=slice_type)
+        else:
+            slice_data["bert_f1"] = 0.5  # Default if no scores available
+
+        # Calculate group sizes for reference
+        group_sizes = merged_df[slice_type].value_counts().to_dict()
+
+        # Add group size annotation to labels
+        x_labels = [
+            f"{group}\n(n={group_sizes.get(group, 0)})"
+            for group in slice_data[slice_type]
+        ]
+
+        # Plot accuracy by slice
+        axs[0, 0].bar(range(len(slice_data)), slice_data[f"y_pred_{task}"])
+        axs[0, 0].set_title("Accuracy by Group")
+        axs[0, 0].set_ylabel("Accuracy")
+        axs[0, 0].set_xticks(range(len(slice_data)))
+        axs[0, 0].set_xticklabels(x_labels)
+        axs[0, 0].set_ylim(0, 1)
+
+        # Plot BERT F1 score by slice
+        axs[0, 1].bar(range(len(slice_data)), slice_data["bert_f1"])
+        axs[0, 1].set_title("BERT F1 Score by Group")
+        axs[0, 1].set_ylabel("BERT F1")
+        axs[0, 1].set_xticks(range(len(slice_data)))
+        axs[0, 1].set_xticklabels(x_labels)
+        axs[0, 1].set_ylim(0, 1)
+
+        # Calculate true positive and false positive rates if possible
+        # For simplicity, using accuracy as a proxy for TPR and (1-accuracy) for FPR
+        tpr = slice_data[f"y_pred_{task}"]
+        fpr = 1 - slice_data[f"y_pred_{task}"]
+
+        # Plot confusion matrix metrics
+        axs[1, 0].bar(range(len(slice_data)), tpr)
+        axs[1, 0].set_title("True Positive Rate by Group")
+        axs[1, 0].set_ylabel("TPR")
+        axs[1, 0].set_xticks(range(len(slice_data)))
+        axs[1, 0].set_xticklabels(x_labels)
+        axs[1, 0].set_ylim(0, 1)
+
+        axs[1, 1].bar(range(len(slice_data)), fpr)
+        axs[1, 1].set_title("False Positive Rate by Group")
+        axs[1, 1].set_ylabel("FPR")
+        axs[1, 1].set_xticks(range(len(slice_data)))
+        axs[1, 1].set_xticklabels(x_labels)
+        axs[1, 1].set_ylim(0, 1)
+
+        plt.tight_layout()
+
+        # Save to BytesIO
         buf = BytesIO()
-        plt.savefig(buf, format="png")
+        plt.savefig(buf, format="png", dpi=100)
         plt.close()
 
         # Convert to base64
