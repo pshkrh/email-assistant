@@ -54,8 +54,8 @@ jobs:
 
       - name: Configure DVC remote
         run: |
-          dvc remote add -d myremote gs://mail_mate || echo "Remote already exists"
-          dvc remote modify myremote credentialpath gcp-dvc-sa.json
+          dvc remote add -d mail_mate gs://mail_mate || echo "Remote already exists"
+          dvc remote modify mail_mate credentialpath gcp-dvc-sa.json
 
       - name: Pull DVC data
         run: |
