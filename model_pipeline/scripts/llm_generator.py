@@ -33,7 +33,6 @@ from send_notification import send_email_notification
 
 # Import secret manager if in Cloud Run
 if IN_CLOUD_RUN:
-    from secret_manager import get_credentials_from_secret
 
     # Initialize GCP Cloud Logging
     gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
@@ -47,6 +46,8 @@ IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 # Initialize credentials based on environment
 if IN_CLOUD_RUN or IN_GITHUB_ACTIONS:
+    from secret_manager import get_credentials_from_secret
+
     creds_dict = get_credentials_from_secret(
         GCP_PROJECT_ID, SERVICE_ACCOUNT_SECRET_ID, save_to_file=SERVICE_ACCOUNT_FILE
     )
