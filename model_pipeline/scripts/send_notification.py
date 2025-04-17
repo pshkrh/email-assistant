@@ -39,6 +39,11 @@ def send_email_notification(error_type, error_message, request_id=None):
             creds_json = base64.b64decode(creds_b64).decode("utf-8")
             creds_dict = json.loads(creds_json)
 
+            sender = os.getenv(
+                "NOTIFICATION_SENDER_EMAIL",
+                "shubhdesai111@gmail.com",
+            )
+
             credentials = service_account.Credentials.from_service_account_info(
                 creds_dict,
                 scopes=["https://www.googleapis.com/auth/gmail.send"],
