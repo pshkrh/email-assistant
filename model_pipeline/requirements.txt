@@ -10,9 +10,15 @@ tqdm
 python-dotenv
 google-auth-oauthlib
 google-api-python-client
+mlflow==2.16.2
+google-cloud-secret-manager==2.20.0
+google-cloud-logging==3.10.0
+google-cloud-audit-log==0.2.5
+google-cloud-core==2.4.1
+protobuf==3.19.6 
+opentelemetry-proto==1.26.0 
 flask
 flask_cors
-mlflow
 jinja2
 vertexai
 fuzzywuzzy
@@ -20,4 +26,12 @@ nltk
 rouge-score
 bert-score
 spacy==3.8.3
+psycopg2-binary
+fairlearn==0.12.0
+shap>=0.46.0
+seaborn
+google-cloud-storage==2.18.2
+matplotlib
+tenacity
+google-api-core
 # blis  # Pin to a version with ARM64 pre-built wheel

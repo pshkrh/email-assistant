@@ -1,184 +1,398 @@
-# model_pipeline/output_verifier.py
+"""
+Output Verifier Module
+
+This module verifies the quality and structure of ranked outputs from the ranker module.
+It ensures outputs meet structural requirements (e.g., bullet points for summaries,
+proper sign-offs for replies) and regenerates content if needed.
+"""
+
+import time
+import re
+
 import mlflow
+import yaml
+from google.cloud import logging as gcp_logging
 
 from llm_generator import process_email_body
 from llm_ranker import rank_all_outputs
-import re
-import yaml
-from config import STRUCTURE_PROMPTS_YAML
+from config import STRUCTURE_PROMPTS_YAML, GCP_PROJECT_ID
+from send_notification import send_email_notification
+
+# Initialize GCP Cloud Logging
+gcp_client = gcp_logging.Client(project=GCP_PROJECT_ID)
+gcp_logger = gcp_client.logger("output_verifier")
 
 
-def load_structure_rules(yaml_file_path):
+def load_structure_rules(yaml_file_path, request_id=None):
     """
-    Loads structure rules from a YAML file and returns them as a dictionary.
+    Load structural rules for output verification from YAML file.
+
+    Args:
+        yaml_file_path (str): Path to YAML file with structure rules
+        request_id (str, optional): Unique identifier for request correlation
+
+    Returns:
+        dict: Dictionary of structure rules by task
+
+    Raises:
+        FileNotFoundError: If YAML file not found
+        YAMLError: If YAML parsing fails
     """
-    with open(yaml_file_path, "r") as file:
-        return yaml.safe_load(file)
+    try:
+        with open(yaml_file_path, "r") as file:
+            rules = yaml.safe_load(file)
+        gcp_logger.log_struct(
+            {
+                "message": "Loaded structure rules",
+                "request_id": request_id or "unknown",
+                "file_path": yaml_file_path,
+                "rule_count": len(rules) if rules else 0,
+            },
+            severity="INFO",
+        )
+        return rules
+    except (FileNotFoundError, yaml.YAMLError, ValueError) as e:
+        error_msg = f"Error loading structure rules: {str(e)}"
+        gcp_logger.log_struct(
+            {"message": error_msg, "request_id": request_id or "unknown"},
+            severity="ERROR",
+        )
+        raise
 
 
-def verify_structure(output, task, rules):
+def verify_structure(output, task, rules, request_id=None):
     """
-    Verifies that `output` matches the structure defined for `task`
-    according to the loaded `rules`.
+    Verify the structure of an output against task-specific rules.
+
+    Args:
+        output (str): Generated output text
+        task (str): Task type (summary, action_items, draft_reply)
+        rules (dict): Dictionary of structure rules by task
+        request_id (str, optional): Unique identifier for request correlation
+
+    Returns:
+        bool: True if structure is valid, False otherwise
     """
+    # Check if rules exist for this task
     if task not in rules:
-        # If the task is not found in the YAML, consider it invalid or handle gracefully
+        gcp_logger.log_struct(
+            {
+                "message": f"Task {task} not found in structure rules",
+                "request_id": request_id or "unknown",
+                "task": task,
+            },
+            severity="WARNING",
+        )
         return False
 
     task_rules = rules[task]
+    result = False
 
-    # ------------------------------
-    # EXAMPLE: summary
-    # ------------------------------
+    # Apply task-specific verification rules
     if task == "summary":
-        # 1. Check bullet patterns
-        bullet_found = False
-        for pattern in task_rules.get("bullet_patterns", []):
-            # Compile once per pattern
-            if re.search(pattern, output, flags=re.MULTILINE):
-                bullet_found = True
-                break
-        if not bullet_found:
-            return False
-
-        # 2. Check prohibited phrases
-        for phrase in task_rules.get("prohibited_phrases", []):
-            if phrase in output:
-                return False
-
-        # 3. (Optional) Check word count if specified
-        # min_word_count = task_rules.get("min_word_count", None)
-        # max_word_count = task_rules.get("max_word_count", None)
-        # if min_word_count or max_word_count:
-        #     word_count = len(output.split())
-        #     if min_word_count and word_count < min_word_count:
-        #         return False
-        #     if max_word_count and word_count > max_word_count:
-        #         return False
-
-        return True
-
-    # ------------------------------
-    # EXAMPLE: action_items
-    # ------------------------------
-    elif task == "action_items":
-        # 1. Check bullet patterns
-        bullet_found = False
-        for pattern in task_rules.get("bullet_patterns", []):
-            if re.search(pattern, output, flags=re.MULTILINE):
-                bullet_found = True
-                break
-        if not bullet_found:
-            return False
-
-        # 2. Check prohibited phrases
-        for phrase in task_rules.get("prohibited_phrases", []):
-            if phrase in output:
-                return False
-
-        return True
-
-    # ------------------------------
-    # EXAMPLE: draft_reply
-    # ------------------------------
-    elif task == "draft_reply":
-        # 1. Must contain at least one of the required phrases (e.g. "Dear")
-        required_phrases = task_rules.get("required_phrases", [])
-        for req_phrase in required_phrases:
-            if req_phrase not in output:
-                return False
-
-        # 2. Must contain at least one of the sign-off phrases
-        sign_off_phrases = task_rules.get("sign_off_phrases", [])
-        if not any(phrase in output for phrase in sign_off_phrases):
-            return False
-
-        # 3. (Optional) Minimum number of lines
-        # min_lines = task_rules.get("min_lines", None)
-        # if min_lines:
-        #     lines = output.strip().split('\n')
-        #     if len(lines) < min_lines:
-        #         return False
-
-        return True
-
-    else:
-        # Unrecognized task
-        return False
-
-
-def get_best_output(ranked_outputs, task, body, userEmail, max_attempts=2):
-    """Verify top output, fall back if needed, retry LLM if all fail."""
-    # Example usage:
-    rules = load_structure_rules(STRUCTURE_PROMPTS_YAML)
-
-    attempt = 0
-    with mlflow.start_run(nested=True):
-        mlflow.log_param(f"{task}_max_attempts", max_attempts)
-        while attempt < max_attempts:
-            for i, output in enumerate(ranked_outputs):
-                if verify_structure(output, task, rules):
-                    mlflow.log_metric(f"{task}_verification_attempts", attempt + 1)
-                    mlflow.log_text(output, f"{task}_verified_output.txt")
-                    return output
-            attempt += 1
-            ranked_outputs = rank_all_outputs(
-                process_email_body(body, [task], userEmail), [task], body
-            )[task]
-            mlflow.log_metric(f"{task}_regen_attempts", attempt)
-        mlflow.log_text(ranked_outputs[0], f"{task}_fallback_output.txt")
-        return ranked_outputs[0]  # Fallback
-
-
-def verify_all_outputs(ranked_outputs_dict, tasks, body, userEmail):
-    """Verify and select best output for each task."""
-
-    best_output = {}
-    for task in tasks:
-        best_output[task] = get_best_output(
-            ranked_outputs_dict[task], task, body, userEmail
+        # Check for bullet point patterns and prohibited phrases
+        bullet_found = any(
+            re.search(pattern, output, flags=re.MULTILINE)
+            for pattern in task_rules.get("bullet_patterns", [])
         )
-    return best_output
+        prohibited_found = any(
+            phrase in output for phrase in task_rules.get("prohibited_phrases", [])
+        )
+        result = bullet_found and not prohibited_found
+    elif task == "action_items":
+        # Check for bullet point patterns and prohibited phrases
+        bullet_found = any(
+            re.search(pattern, output, flags=re.MULTILINE)
+            for pattern in task_rules.get("bullet_patterns", [])
+        )
+        prohibited_found = any(
+            phrase in output for phrase in task_rules.get("prohibited_phrases", [])
+        )
+        result = bullet_found and not prohibited_found
+    elif task == "draft_reply":
+        # Check for required phrases and sign-off
+        required_phrases_met = all(
+            req_phrase in output
+            for req_phrase in task_rules.get("required_phrases", [])
+        )
+        sign_off_found = any(
+            phrase in output for phrase in task_rules.get("sign_off_phrases", [])
+        )
+        result = required_phrases_met and sign_off_found
+
+    # Log verification result
+    gcp_logger.log_struct(
+        {
+            "message": f"Verified structure for task {task}",
+            "request_id": request_id or "unknown",
+            "task": task,
+            "result": result,
+            "output_length": len(output),
+        },
+        severity="DEBUG",
+    )
+    return result
 
 
-# if __name__ == "__main__":
+def get_best_output(
+    ranked_outputs,
+    task,
+    body,
+    userEmail,
+    experiment_id,
+    max_attempts=2,
+    request_id=None,
+):
+    """
+    Get the best output that passes structural verification.
 
-#     body = """
-#         Checked out
-#         ---------- Forwarded message ---------
-#         From: Try <try8200@gmail.com>
-#         Date: Sun, Mar 9, 2025 at 8:41 PM
-#         Subject: Fwd: Test
-#         To: Shubh Desai <shubhdesai111@gmail.com>
+    If no outputs pass verification, regenerate content and retry.
+
+    Args:
+        ranked_outputs (list): List of outputs ranked by quality
+        task (str): Task type (summary, action_items, draft_reply)
+        body (str): Email body text
+        userEmail (str): User email address
+        experiment_id (str): MLflow experiment ID
+        max_attempts (int): Maximum number of regeneration attempts
+        request_id (str, optional): Unique identifier for request correlation
+
+    Returns:
+        str: Best verified output
+    """
+    start_time = time.time()
+    rules = load_structure_rules(STRUCTURE_PROMPTS_YAML, request_id)
+
+    with mlflow.start_run(
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"verify_{task}_{request_id or 'unknown'}",
+    ):
+        # Log parameters
+        mlflow.log_params(
+            {
+                "task": task,
+                "request_id": request_id or "unknown",
+                "max_attempts": max_attempts,
+                "input_output_count": len(ranked_outputs),
+            }
+        )
+        gcp_logger.log_struct(
+            {
+                "message": f"Starting verification for task {task}",
+                "request_id": request_id or "unknown",
+                "task": task,
+                "user_email": userEmail,
+                "max_attempts": max_attempts,
+                "input_output_count": len(ranked_outputs),
+            },
+            severity="INFO",
+        )
+
+        attempt = 0
+        while attempt < max_attempts:
+            # Try each output in ranked order
+            for i, output in enumerate(ranked_outputs):
+                if verify_structure(output, task, rules, request_id):
+                    # Found valid output
+                    mlflow.log_metric("verification_attempts", attempt + 1)
+                    mlflow.log_text(output, f"{task}_verified_output.txt")
+                    duration = time.time() - start_time
+                    mlflow.log_metric("verification_duration_seconds", duration)
+                    gcp_logger.log_struct(
+                        {
+                            "message": f"Verified output for task {task}",
+                            "request_id": request_id or "unknown",
+                            "task": task,
+                            "attempt": attempt,
+                            "index": i,
+                            "duration_seconds": duration,
+                        },
+                        severity="INFO",
+                    )
+                    return output
+
+            # No valid outputs found, retry
+            attempt += 1
+            gcp_logger.log_struct(
+                {
+                    "message": f"No valid output found, retrying task {task}",
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                    "attempt": attempt,
+                },
+                severity="WARNING",
+            )
+
+            try:
+                # Regenerate outputs with default settings
+                new_llm_outputs = process_email_body(
+                    body=body,
+                    task=task,
+                    user_email=userEmail,
+                    prompt_strategy={},
+                    negative_examples=[],
+                    request_id=request_id,
+                    experiment_id=experiment_id,
+                )
+                # Rank new outputs
+                ranked_outputs = rank_all_outputs(
+                    llm_outputs=new_llm_outputs,
+                    task=task,
+                    body=body,
+                    request_id=request_id,
+                    experiment_id=experiment_id,
+                )[task]
+
+                # Log regeneration metrics
+                mlflow.log_metric("regen_attempts", attempt)
+                mlflow.log_dict(
+                    {task: ranked_outputs}, f"{task}_regenerated_outputs.json"
+                )
+                gcp_logger.log_struct(
+                    {
+                        "message": f"Regenerated outputs for task {task}",
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                        "attempt": attempt,
+                        "new_output_count": len(ranked_outputs),
+                    },
+                    severity="DEBUG",
+                )
+            except Exception as e:
+                # Handle regeneration errors
+                error_msg = f"Regeneration failed for task {task}: {str(e)}"
+                mlflow.log_param("regen_error", str(e))
+                gcp_logger.log_struct(
+                    {
+                        "message": error_msg,
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                        "attempt": attempt,
+                    },
+                    severity="ERROR",
+                )
+                send_email_notification(
+                    "LLM Regeneration Failure", error_msg, request_id
+                )
+                break
+
+        # Fallback to top-ranked output if no valid outputs found
+        fallback_output = ranked_outputs[0]
+        mlflow.log_text(fallback_output, f"{task}_fallback_output.txt")
+        duration = time.time() - start_time
+        mlflow.log_metric("verification_duration_seconds", duration)
+        gcp_logger.log_struct(
+            {
+                "message": f"Fallback to top-ranked output for task {task}",
+                "request_id": request_id or "unknown",
+                "task": task,
+                "attempts_made": attempt,
+                "duration_seconds": duration,
+            },
+            severity="WARNING",
+        )
+        return fallback_output
 
 
-#         Check out this
-#         ---------- Forwarded message ---------
-#         From: Shubh Desai <shubhdesai111@gmail.com>
-#         Date: Sun, Mar 9, 2025 at 8:37 PM
-#         Subject: Re: Test
-#         To: Try <try8200@gmail.com>
+def verify_all_outputs(
+    ranked_outputs_dict, task, body, userEmail, experiment_id, request_id=None
+):
+    """
+    Verify all outputs for a task and return the best one.
 
+    Args:
+        ranked_outputs_dict (dict): Dictionary of ranked outputs by task
+        task (str): Task type (summary, action_items, draft_reply)
+        body (str): Email body text
+        userEmail (str): User email address
+        experiment_id (str): MLflow experiment ID
+        request_id (str, optional): Unique identifier for request correlation
 
-#         Hey, once again
+    Returns:
+        str: Best verified output for the task
 
-#         On Sun, Mar 9, 2025 at 8:36 PM Try <try8200@gmail.com> wrote:
-#         hello Shubh
+    Raises:
+        ValueError: If no ranked outputs found
+    """
+    start_time = time.time()
 
-#         On Sun, Mar 9, 2025 at 8:35 PM Shubh Desai <shubhdesai111@gmail.com> wrote:
-#         Hello Try
-#         we have a meeting tomorrow at 10am, related to the project and its important to discuss the project and its progress
-#         Also we have a important deadline for the project on 30th march of this month. So we need to speed up the process and complete the project on time.
+    with mlflow.start_run(
+        nested=True,
+        experiment_id=experiment_id,
+        run_name=f"verify_all_{task}_{request_id or 'unknown'}",
+    ):
+        # Log parameters
+        mlflow.log_params(
+            {
+                "task": task,
+                "request_id": request_id or "unknown",
+                "user_email": userEmail,
+            }
+        )
+        gcp_logger.log_struct(
+            {
+                "message": f"Verifying all outputs for task {task}",
+                "request_id": request_id or "unknown",
+                "task": task,
+                "user_email": userEmail,
+            },
+            severity="INFO",
+        )
 
-#     """
+        try:
+            # Get outputs for this task
+            outputs = ranked_outputs_dict.get(task)
 
-#     # Test the output verifier
-#     tasks = ["summary", "action_item", "draft_reply"]
-#     userEmail = "try8200@gmail.com"
-#     llm_outputs = process_email_body(body, tasks, userEmail)
-#     ranked_outputs = rank_all_outputs(llm_outputs, tasks, body)
-#     best_outputs = verify_all_outputs(ranked_outputs, tasks, body, userEmail)
-#     for task, output in best_outputs.items():
-#         print(f"\n\n{task.upper()} OUTPUT\n{output}\n\n")
+            # Validate outputs
+            if not outputs or not isinstance(outputs, list):
+                error_msg = f"No ranked outputs found for task '{task}'"
+                mlflow.log_param("verify_error", error_msg)
+                gcp_logger.log_struct(
+                    {
+                        "message": error_msg,
+                        "request_id": request_id or "unknown",
+                        "task": task,
+                    },
+                    severity="ERROR",
+                )
+                send_email_notification("LLM Output Failure", error_msg, request_id)
+                raise ValueError(error_msg)
 
-#     # print(best_outputs)
+            # Get the best output
+            best_output = get_best_output(
+                ranked_outputs=outputs,
+                task=task,
+                body=body,
+                userEmail=userEmail,
+                experiment_id=experiment_id,
+                request_id=request_id,
+            )
+
+            # Log best output and metrics
+            mlflow.log_dict({task: best_output}, f"{task}_best_output.json")
+            duration = time.time() - start_time
+            mlflow.log_metric("verify_all_duration_seconds", duration)
+            gcp_logger.log_struct(
+                {
+                    "message": f"Completed verification for task {task}",
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                    "duration_seconds": duration,
+                },
+                severity="INFO",
+            )
+            return best_output
+        except Exception as e:
+            # Handle verification errors
+            error_msg = f"Verification failed for task '{task}': {str(e)}"
+            mlflow.log_param("verify_error", str(e))
+            gcp_logger.log_struct(
+                {
+                    "message": error_msg,
+                    "request_id": request_id or "unknown",
+                    "task": task,
+                },
+                severity="ERROR",
+            )
+            raise

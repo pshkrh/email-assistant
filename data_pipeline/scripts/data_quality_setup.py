@@ -30,17 +30,38 @@ def setup_gx_context_and_logger(context_root_dir, log_path, logger_name):
 
     Returns:
         str: Path to the initialized context.
+
+    Raises:
+        ValueError: If input parameters are invalid.
+        OSError: If directory creation fails.
+        gx.exceptions.DataContextError: If Great Expectations context initialization fails.
+        Exception: For unexpected errors.
     """
+    if not all([context_root_dir, log_path, logger_name]):
+        error_message = "One or more input parameters are empty"
+        raise ValueError(error_message)
+
     data_quality_logger = create_logger(log_path, logger_name)
+
     try:
         os.makedirs(context_root_dir, exist_ok=True)
+    except OSError as e:
+        error_message = f"Failed to create directory {context_root_dir}: {e}"
+        data_quality_logger.error(error_message, exc_info=True)
+        raise
+
+    try:
         gx.get_context(context_root_dir=context_root_dir)
         data_quality_logger.info("Successfully created gx-context and logger")
         return context_root_dir
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        error_message = f"Error creating gx context: {e}"
+    except gx.exceptions.DataContextError as e:
+        error_message = f"Error initializing Great Expectations context: {e}"
         data_quality_logger.error(error_message, exc_info=True)
-        return None
+        raise
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        error_message = f"Unexpected error in setting up gx context: {e}"
+        data_quality_logger.error(error_message, exc_info=True)
+        raise
 
 
 if __name__ == "__main__":
@@ -51,17 +72,28 @@ if __name__ == "__main__":
     ANOMALY_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_anomaly_log.log"
     ANOMALY_LOGGER_NAME = "data_anomaly_logger"
     CSV_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_emails.csv"
-    gx_context_root_dir = setup_gx_context_and_logger(
-        CONTEXT_ROOT_DIR, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
-    )
-    suite = define_expectations(
-        CSV_PATH, gx_context_root_dir, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
-    )
-    validation_results = validate_data(
-        CSV_PATH,
-        suite,
-        gx_context_root_dir,
-        DATA_QUALITY_PATH,
-        DATA_QUALITY_LOGGER_NAME,
-    )
-    handle_anomalies(validation_results, ANOMALY_PATH, ANOMALY_LOGGER_NAME)
+
+    try:
+        GX_CONTEXT_ROOT_DIR = setup_gx_context_and_logger(
+            CONTEXT_ROOT_DIR, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
+        )
+        suite = define_expectations(
+            CSV_PATH, GX_CONTEXT_ROOT_DIR, DATA_QUALITY_PATH, DATA_QUALITY_LOGGER_NAME
+        )
+        validation_results = validate_data(
+            CSV_PATH,
+            suite,
+            GX_CONTEXT_ROOT_DIR,
+            DATA_QUALITY_PATH,
+            DATA_QUALITY_LOGGER_NAME,
+        )
+        handle_anomalies(validation_results, ANOMALY_PATH, ANOMALY_LOGGER_NAME)
+        print("Data quality setup and validation completed successfully.")
+    except ValueError as e:
+        print(f"Input error: {e}")
+    except OSError as e:
+        print(f"System error: {e}")
+    except gx.exceptions.DataContextError as e:
+        print(f"Great Expectations error: {e}")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        print(f"Unexpected error: {e}")

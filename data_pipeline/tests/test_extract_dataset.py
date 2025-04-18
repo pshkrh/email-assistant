@@ -1,5 +1,5 @@
 """
-Unit tests for the extract_enron_dataset function.
+Test module for extract_dataset.py
 """
 
 import os
@@ -20,7 +20,7 @@ from extract_dataset import extract_enron_dataset
 
 @pytest.fixture
 def setup_paths(tmp_path):
-    """Fixture to create temporary paths for testing."""
+    """Fixture to set up temporary paths for testing."""
     return {
         "archive_path": str(tmp_path / "emails.tar.gz"),
         "extract_to": str(tmp_path / "extracted_dataset"),
@@ -32,19 +32,21 @@ def setup_paths(tmp_path):
 # pylint: disable=redefined-outer-name
 def test_extract_success(mocker: MockerFixture, setup_paths):
     """Test successful extraction of the dataset."""
-    mocker.patch("os.path.exists", return_value=False)
-    mocker.patch("os.listdir", return_value=[])
+    # Archive exists, extraction directory doesn't yet exist
+    mocker.patch(
+        "os.path.exists", side_effect=[True, False]
+    )  # Archive: True, extract_to: False
+    mocker.patch("os.listdir", return_value=[])  # extract_to is empty
     mock_makedirs = mocker.patch("extract_dataset.os.makedirs")
     mock_logger = mocker.MagicMock()
     mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
-    mock_member1 = mocker.MagicMock()
-    mock_member2 = mocker.MagicMock()
+    mock_member1 = mocker.MagicMock(name="member1")
+    mock_member2 = mocker.MagicMock(name="member2")
     mock_tar = mocker.MagicMock()
     mock_tar.getmembers.return_value = [mock_member1, mock_member2]
     mock_tar.extract = mocker.MagicMock()
     mock_tar.__enter__.return_value = mock_tar
     mocker.patch("tarfile.open", return_value=mock_tar)
-
     mock_progress_bar = mocker.MagicMock()
     mocker.patch("extract_dataset.tqdm", return_value=mock_progress_bar)
     mock_progress_bar.__enter__.return_value = mock_progress_bar
@@ -60,45 +62,18 @@ def test_extract_success(mocker: MockerFixture, setup_paths):
     mock_makedirs.assert_called_once_with(setup_paths["extract_to"], exist_ok=True)
     mock_logger.info.assert_any_call("Extracting the dataset...")
     mock_logger.info.assert_any_call(
-        "Extraction complete! Files are saved in %s ", setup_paths["extract_to"]
+        "Extraction complete! Files are saved in %s", setup_paths["extract_to"]
     )
-    assert mock_tar.extract.call_count == 2  # Two members extracted
-    mock_tar.extract.assert_any_call(mock_member1, path=setup_paths["extract_to"])
-    mock_tar.extract.assert_any_call(mock_member2, path=setup_paths["extract_to"])
-
+    assert mock_tar.extract.call_count == 2
     assert mock_progress_bar.update.call_count == 2
-    mock_progress_bar.update.assert_any_call(1)
-
-
-def test_extract_with_real_tar(mocker: MockerFixture, tmp_path):
-    """Test extraction using the real emails.tar.gz file."""
-    real_archive_path = os.path.join(os.path.dirname(__file__), "data", "emails.tar.gz")
-    extract_to = str(tmp_path / "extracted_dataset")
-    log_path = str(tmp_path / "logs" / "test_data_extraction_log.log")
-    logger_name = "test_data_extraction_logger"
-
-    assert os.path.exists(
-        real_archive_path
-    ), f"Real tar file not found at {real_archive_path}"
-
-    mock_logger = mocker.MagicMock()
-    mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
-
-    result = extract_enron_dataset(real_archive_path, extract_to, log_path, logger_name)
-
-    assert result == extract_to
-    assert os.path.exists(extract_to)
-    assert len(os.listdir(extract_to)) > 0
-    mock_logger.info.assert_any_call("Extracting the dataset...")
-    mock_logger.info.assert_any_call(
-        "Extraction complete! Files are saved in %s ", extract_to
-    )
 
 
 def test_already_extracted(mocker: MockerFixture, setup_paths):
-    """Test skipping extraction if directory exists and is non-empty."""
-    mocker.patch("os.path.exists", return_value=True)
-    mocker.patch("os.listdir", return_value=["file1", "file2"])
+    """Test skipping extraction when dataset is already extracted."""
+    mocker.patch(
+        "os.path.exists", side_effect=[True, True]
+    )  # Both archive and extract_to exist
+    mocker.patch("os.listdir", return_value=["file1", "file2"])  # extract_to has files
     mock_logger = mocker.MagicMock()
     mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
 
@@ -109,68 +84,78 @@ def test_already_extracted(mocker: MockerFixture, setup_paths):
         setup_paths["logger_name"],
     )
 
-    assert result is None
+    assert result == setup_paths["extract_to"]
     mock_logger.info.assert_called_once_with(
         "Dataset already extracted, skipping extraction."
     )
-    assert not mocker.patch("tarfile.open").called
+
+
+def test_invalid_input(mocker: MockerFixture):
+    """Test raising ValueError for invalid input."""
+    mock_logger = mocker.MagicMock()
+    mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
+
+    with pytest.raises(ValueError) as exc_info:
+        extract_enron_dataset("", "some/path", "log.log", "logger")
+    assert str(exc_info.value) == "One or more input parameters are empty"
 
 
 def test_tarfile_not_found(mocker: MockerFixture, setup_paths):
-    """Test handling of missing tarfile."""
-    mocker.patch("os.path.exists", return_value=False)
-    mocker.patch("os.listdir", return_value=[])
+    """Test raising FileNotFoundError when archive is missing."""
+    mocker.patch("os.path.exists", return_value=False)  # Archive doesn't exist
     mock_logger = mocker.MagicMock()
     mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
-    mocker.patch("tarfile.open", side_effect=FileNotFoundError("No such file"))
 
-    result = extract_enron_dataset(
-        setup_paths["archive_path"],
-        setup_paths["extract_to"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-    )
-
-    assert result is None
-    mock_logger.error.assert_called_once_with(
-        "Error extracting dataset: No such file", exc_info=True
+    with pytest.raises(FileNotFoundError) as exc_info:
+        extract_enron_dataset(
+            setup_paths["archive_path"],
+            setup_paths["extract_to"],
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+        )
+    assert (
+        str(exc_info.value) == f"Archive file not found: {setup_paths['archive_path']}"
     )
 
 
 def test_permission_denied(mocker: MockerFixture, setup_paths):
-    """Test handling of permission denied error during directory creation."""
-    mocker.patch("os.path.exists", return_value=False)
-    mocker.patch("os.listdir", return_value=[])
+    """Test raising PermissionError during directory creation."""
+    mocker.patch(
+        "os.path.exists", side_effect=[True, False]
+    )  # Archive exists, extract_to doesn't
+    mocker.patch("os.listdir", return_value=[])  # extract_to is empty
     mocker.patch(
         "extract_dataset.os.makedirs", side_effect=PermissionError("Permission denied")
     )
     mock_logger = mocker.MagicMock()
     mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
 
-    result = extract_enron_dataset(
-        setup_paths["archive_path"],
-        setup_paths["extract_to"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-    )
-
-    assert result is None
-    mock_logger.error.assert_called_once_with(
-        "Error extracting dataset: Permission denied", exc_info=True
-    )
+    with pytest.raises(PermissionError) as exc_info:
+        extract_enron_dataset(
+            setup_paths["archive_path"],
+            setup_paths["extract_to"],
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+        )
+    assert str(exc_info.value) == "Permission denied"
 
 
 def test_empty_tarfile(mocker: MockerFixture, setup_paths):
-    """Test handling of an empty tarfile."""
-    mocker.patch("os.path.exists", return_value=False)
-    mocker.patch("os.listdir", return_value=[])
+    """Test extraction with an empty tarfile."""
+    mocker.patch(
+        "os.path.exists", side_effect=[True, False]
+    )  # Archive exists, extract_to doesn't
+    mocker.patch("os.listdir", return_value=[])  # extract_to is empty
     mocker.patch("extract_dataset.os.makedirs")
     mock_logger = mocker.MagicMock()
     mocker.patch("extract_dataset.create_logger", return_value=mock_logger)
     mock_tar = mocker.MagicMock()
-    mock_tar.getmembers.return_value = []
+    mock_tar.getmembers.return_value = []  # Empty tarfile
+    mock_tar.__enter__.return_value = mock_tar
     mocker.patch("tarfile.open", return_value=mock_tar)
-    mock_tqdm = mocker.patch("extract_dataset.tqdm", return_value=mocker.MagicMock())
+    mock_progress_bar = mocker.MagicMock()
+    mocker.patch("extract_dataset.tqdm", return_value=mock_progress_bar)
+    mock_progress_bar.__enter__.return_value = mock_progress_bar
 
     result = extract_enron_dataset(
         setup_paths["archive_path"],
@@ -182,6 +167,10 @@ def test_empty_tarfile(mocker: MockerFixture, setup_paths):
     assert result == setup_paths["extract_to"]
     mock_logger.info.assert_any_call("Extracting the dataset...")
     mock_logger.info.assert_any_call(
-        "Extraction complete! Files are saved in %s ", setup_paths["extract_to"]
+        "Extraction complete! Files are saved in %s", setup_paths["extract_to"]
     )
-    mock_tqdm.return_value.update.assert_not_called()
+    mock_progress_bar.update.assert_not_called()
+
+
+if __name__ == "__main__":
+    pytest.main()

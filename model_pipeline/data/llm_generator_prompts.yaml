@@ -39,12 +39,15 @@ draft_reply: |
   draft_reply: <suggested_reply_here>
   ```
 
-action_item: |
+action_items: |
   From the email thread below, identify clear action items or tasks that the recipient {{ user_email }} needs to perform. 
   List these action items clearly and concisely.
   If there is no action to be performed then reply with "None" (Just "None" nothing else). 
-  Don't add anything else than "None" if there is no action to be performed.
   Include all the named entites properly wherever required to. Ensure the response is always in a structured bullet-point list format.
+  Don't add anything else than None if there is no action to be performed. Example of the structure when None:
+  ```
+  action_items: None
+  ```
 
   Email Thread:
   """
@@ -58,5 +61,5 @@ action_item: |
 
   Please Structure the response in the following format:
   ```
-  action_item: <action_items_here>
+  action_items: <action_items_here>
   ```

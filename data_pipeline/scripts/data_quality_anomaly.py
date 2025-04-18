@@ -116,11 +116,13 @@ def handle_anomalies(log_path, logger_name, **kwargs):
         if anomaly_details:
             # Send email if there's anything actionable
             oauth_config = {
-                "client_id": os.getenv("google_client_id"),
-                "client_secret": os.getenv("google_client_secret"),
-                "refresh_token": os.getenv("google_refresh_token"),
+                "client_id": os.getenv("oauth_client_id"),
+                "client_secret": os.getenv("oauth_client_secret"),
+                "refresh_token": os.getenv("oauth_refresh_token"),
                 "sender_email": os.getenv("sender_email"),
             }
+
+            print("Oath config:", oauth_config)
 
             email_body = "Anomalies detected in email dataset:\n\n" + "\n".join(anomaly_details)
             success = send_email_notification(

@@ -6,4 +6,4 @@ services:
       - .:/model_pipeline  # Mount local directory into the container
     environment:
       - PYTHONUNBUFFERED=1
-    command: ["python", "scripts/main.py"]
+    command: ["python", "scripts/fetch_gmail_threads.py"]

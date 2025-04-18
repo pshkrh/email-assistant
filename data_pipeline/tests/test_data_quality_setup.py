@@ -7,6 +7,7 @@ import sys
 import warnings
 import pytest
 import pandas as pd
+import great_expectations as gx
 from pytest_mock import MockerFixture
 
 warnings.simplefilter("always")
@@ -17,12 +18,19 @@ scripts_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../scr
 sys.path.append(scripts_folder)
 
 # pylint: disable=wrong-import-position
-
-from data_quality_setup import (
-    setup_gx_context_and_logger,
-)  # Assume the file is named data_quality_setup.py
+from data_quality_setup import setup_gx_context_and_logger
 
 # pylint: enable=wrong-import-position
+
+
+@pytest.fixture
+def setup_paths(tmp_path):
+    """Fixture to create temporary paths for testing."""
+    return {
+        "context_root_dir": str(tmp_path / "gx"),
+        "log_path": str(tmp_path / "logs" / "data_quality_log.log"),
+        "logger_name": "test_data_quality_logger",
+    }
 
 
 # pylint: disable=redefined-outer-name
@@ -58,16 +66,17 @@ def test_setup_gx_context_and_logger_dir_creation_failure(
     mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mocker.patch("os.makedirs", side_effect=PermissionError("Permission denied"))
 
-    result = setup_gx_context_and_logger(
-        # pylint: disable=duplicate-code
-        setup_paths["context_root_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-    )
-
-    assert result is None
+    with pytest.raises(OSError) as exc_info:
+        setup_gx_context_and_logger(
+            # pylint: disable=duplicate-code
+            setup_paths["context_root_dir"],
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+        )
+    assert str(exc_info.value) == "Permission denied"
     mock_logger.error.assert_called_once_with(
-        "Error creating gx context: Permission denied", exc_info=True
+        f"Failed to create directory {setup_paths['context_root_dir']}: Permission denied",
+        exc_info=True,
     )
 
 
@@ -79,19 +88,21 @@ def test_setup_gx_context_and_logger_gx_context_failure(
     mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
     mocker.patch("os.makedirs")
     mocker.patch(
-        "great_expectations.get_context", side_effect=Exception("GX context error")
+        "great_expectations.get_context",
+        side_effect=gx.exceptions.DataContextError("GX context error"),
     )
 
-    result = setup_gx_context_and_logger(
-        # pylint: disable=duplicate-code
-        setup_paths["context_root_dir"],
-        setup_paths["log_path"],
-        setup_paths["logger_name"],
-    )
-
-    assert result is None
+    with pytest.raises(gx.exceptions.DataContextError) as exc_info:
+        setup_gx_context_and_logger(
+            # pylint: disable=duplicate-code
+            setup_paths["context_root_dir"],
+            setup_paths["log_path"],
+            setup_paths["logger_name"],
+        )
+    assert str(exc_info.value) == "GX context error"
     mock_logger.error.assert_called_once_with(
-        "Error creating gx context: GX context error", exc_info=True
+        "Error initializing Great Expectations context: GX context error",
+        exc_info=True,
     )
 
 
@@ -121,9 +132,7 @@ def test_setup_gx_context_and_logger_existing_dir(mocker: MockerFixture, setup_p
 
 
 # Placeholder test for full pipeline (requires external scripts)
-def test_full_pipeline_placeholder(
-    mocker: MockerFixture, sample_email_data, setup_paths, tmp_path
-):
+def test_full_pipeline_placeholder(mocker: MockerFixture, setup_paths, tmp_path):
     """Placeholder test for the full pipeline - requires external scripts."""
     # Mock setup
     mock_logger = mocker.MagicMock()
@@ -145,11 +154,11 @@ def test_full_pipeline_placeholder(
     csv_path = str(tmp_path / "enron_emails.csv")
     pd.DataFrame(
         {
-            "Message-ID": sample_email_data["Message-ID"],
-            "Date": sample_email_data["Date"],
-            "From": sample_email_data["From"],
-            "To": sample_email_data["To"],
-            "Subject": sample_email_data["Subject"],
+            "Message-ID": ["<123@example.com>"],
+            "Date": ["Wed, 2 Jan 2002 14:30:00 -0800 (PST)"],
+            "From": ["sender@example.com"],
+            "To": ["recipient@example.com"],
+            "Subject": ["Test Email"],
             "Body": ["Hello"],
         }
     ).to_csv(csv_path, index=False)
@@ -165,6 +174,18 @@ def test_full_pipeline_placeholder(
     mock_logger.info.assert_called_once_with(
         "Successfully created gx-context and logger"
     )
+
+
+def test_setup_gx_context_and_logger_invalid_input(mocker: MockerFixture, setup_paths):
+    """Test raising ValueError for invalid input."""
+    mock_logger = mocker.MagicMock()
+    mocker.patch("data_quality_setup.create_logger", return_value=mock_logger)
+
+    with pytest.raises(ValueError) as exc_info:
+        setup_gx_context_and_logger(
+            "", setup_paths["log_path"], setup_paths["logger_name"]
+        )
+    assert str(exc_info.value) == "One or more input parameters are empty"
 
 
 if __name__ == "__main__":
