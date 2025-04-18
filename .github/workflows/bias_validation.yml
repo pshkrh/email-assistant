@@ -61,7 +61,7 @@ jobs:
 
       - name: Pull DVC data
         run: |
-          dvc pull data_pipeline/data/enron_emails.csv.dvc
+          dvc pull model_pipeline/data/labeled_enron_sample_with_from.csv.dvc
 
       - name: Run Validation
         run: |

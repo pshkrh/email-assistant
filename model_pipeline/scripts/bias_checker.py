@@ -32,16 +32,13 @@ from fairlearn.metrics import (
 )
 
 # Local application imports
-from config import LABELED_SAMPLE_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
+from config import LABELED_SAMPLE_FROM_CSV_PATH, PREDICTED_SAMPLE_CSV_PATH
 from mlflow_config import configure_mlflow
 from send_notification import send_email_notification
 
 # Configure logging and load NLP model
 hf_logging.set_verbosity_error()  # Suppress transformer warnings
 nlp = spacy.load("en_core_web_sm")  # Load spaCy model for NER
-
-# Path to enron_emails.csv
-ENRON_EMAILS_CSV_PATH = "data_pipeline/data/enron_emails.csv"
 
 # Set up MLflow experiment
 experiment = configure_mlflow()
@@ -640,7 +637,7 @@ def check_bias(labeled_df, predicted_df):
     mlflow.log_artifact("bias_evaluation.csv")
 
 
-def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_PATH):
+def main(predicted_csv_path, labeled_csv_path):
     """
     Main function to run bias checking.
 
@@ -661,19 +658,16 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
         # Log parameters
         mlflow.log_param("predicted_csv_path", predicted_csv_path)
         mlflow.log_param("labeled_csv_path", labeled_csv_path)
-        mlflow.log_param("enron_csv_path", enron_csv_path)
 
         # Load datasets
         labeled_df = pd.read_csv(labeled_csv_path)
         predicted_df = pd.read_csv(predicted_csv_path)
 
         # Get sender information from Enron dataset
-        enron_df = pd.read_csv(enron_csv_path)[["Message-ID", "From"]].rename(
-            columns={"From": "Sender"}
-        )
+        labeled_df.rename(columns={"From": "Sender"}, inplace=True)
 
         # Merge sender info with labeled data
-        labeled_df = pd.merge(labeled_df, enron_df, on="Message-ID", how="left")
+        # labeled_df = pd.merge(labeled_df, enron_df, on="Message-ID", how="left")
         if labeled_df["Sender"].isna().all():
             labeled_df["Sender"] = "unknown"
 
@@ -703,4 +697,4 @@ def main(predicted_csv_path, labeled_csv_path, enron_csv_path=ENRON_EMAILS_CSV_P
 
 
 if __name__ == "__main__":
-    main(PREDICTED_SAMPLE_CSV_PATH, LABELED_SAMPLE_CSV_PATH)
+    main(PREDICTED_SAMPLE_CSV_PATH, LABELED_SAMPLE_FROM_CSV_PATH)
