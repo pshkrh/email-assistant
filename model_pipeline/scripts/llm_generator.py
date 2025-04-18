@@ -16,6 +16,13 @@ from google.cloud import logging as gcp_logging
 from dotenv import load_dotenv
 import vertexai
 from vertexai.generative_models import GenerativeModel
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_message,
+)
+from google.api_core.exceptions import ResourceExhausted
 
 from config import (
     SERVICE_ACCOUNT_FILE,
@@ -109,6 +116,17 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
                 severity="INFO",
             )
 
+        # Retry function for API calls
+        @retry(
+            stop=stop_after_attempt(5),  # Max 5 retries
+            wait=wait_exponential(
+                multiplier=1, min=4, max=60
+            ),  # Exponential backoff: 4s, 8s, 16s, 32s, 60s
+            retry=retry_if_exception_message(match="429.*Resource exhausted"),
+        )
+        def call_gemini(model, prompt):
+            return model.generate_content(prompt)
+
         # Generate 3 candidate outputs
         for i in range(3):
             try:
@@ -118,7 +136,7 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
                 )
 
                 # Generate content
-                response = model.generate_content(prompt)
+                response = call_gemini(model, prompt)
                 response_text = (
                     response.text.strip() if response and response.text else ""
                 )
@@ -169,6 +187,21 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
                         },
                         severity="DEBUG",
                     )
+            except ResourceExhausted as e:
+                error_msg = f"Failed to generate output {i} for task {task} after retries: {str(e)}"
+                outputs.append(error_msg)
+                mlflow.log_text(error_msg, f"{task}_output_{i}_error.txt")
+                if IN_CLOUD_RUN:
+                    gcp_logger.log_struct(
+                        {
+                            "message": error_msg,
+                            "request_id": request_id or "unknown",
+                            "task": task,
+                        },
+                        severity="ERROR",
+                    )
+                send_email_notification("LLM Connection Failure", error_msg, request_id)
+                continue
             except Exception as e:
                 # Handle generation errors
                 error_msg = f"Failed to generate output {i} for task {task}: {str(e)}"

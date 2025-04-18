@@ -32,4 +32,6 @@ shap>=0.46.0
 seaborn
 google-cloud-storage==2.18.2
 matplotlib
+tenacity
+google-api-core
 # blis  # Pin to a version with ARM64 pre-built wheel

@@ -23,3 +23,5 @@ google-api-python-client
 google-auth-oauthlib
 google-cloud-logging==3.10.0
 google-cloud-secret-manager==2.20.0
+tenacity
+google-api-core
