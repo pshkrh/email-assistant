@@ -118,10 +118,8 @@ def generate_outputs(task, prompt, experiment_id, request_id=None):
 
         # Retry function for API calls
         @retry(
-            stop=stop_after_attempt(5),  # Max 5 retries
-            wait=wait_exponential(
-                multiplier=1, min=4, max=60
-            ),  # Exponential backoff: 4s, 8s, 16s, 32s, 60s
+            stop=stop_after_attempt(6),  # Max 5 retries
+            wait=wait_exponential(multiplier=10, min=10, max=180),
             retry=retry_if_exception_message(match="429.*Resource exhausted"),
         )
         def call_gemini(model, prompt):
