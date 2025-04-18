@@ -20,10 +20,9 @@ Functions:
 
 import re
 import pandas as pd
-
 from create_logger import create_logger
 from get_project_root import project_root
-
+from airflow.operators.python import get_current_context
 
 def clean_and_parse_dates(csv_path, log_path, logger_name):
     """
@@ -106,8 +105,14 @@ def clean_and_parse_dates(csv_path, log_path, logger_name):
         data_preprocessing_logger.info(
             "DataFrame saved to enron_emails.csv successfully."
         )
+        
+        parsed_path = "/opt/airflow/dags/data_pipeline/data/parsed_email_dates.csv"
 
-        return csv_path
+        df.to_csv(parsed_path, index=False)
+
+        context = get_current_context()
+        context['ti'].xcom_push(key='return_value', value=parsed_path)
+        return parsed_path
     except Exception as e:  # pylint: disable=broad-exception-caught
         error_message = f"Error in cleaning and parsing dates: {e}"
         data_preprocessing_logger.error(error_message, exc_info=True)

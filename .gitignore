@@ -24,3 +24,7 @@ logs/*
 data_pipeline/tests/data/true_csv/*
 .dvc/
 mlruns/
+data_pipeline/scripts/simple.py
+model_pipeline/scripts/sample.py
+Oauth_Client_Secret.json
+data_pipeline/script.py

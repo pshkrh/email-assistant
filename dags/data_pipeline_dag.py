@@ -21,6 +21,7 @@ from data_pipeline.scripts.data_quality_expectations import define_expectations
 from data_pipeline.scripts.data_quality_validation import validate_data
 from data_pipeline.scripts.data_quality_anomaly import handle_anomalies
 from data_pipeline.scripts.get_project_root import project_root
+from data_pipeline.scripts.data_clean import data_clean
 
 # Default arguments for DAG
 default_args = {
@@ -95,6 +96,18 @@ clean_email_dates = PythonOperator(
     },
     dag=dag,
 )
+clean_data = PythonOperator(
+    task_id="clean_data",
+    python_callable=data_clean,
+    op_kwargs={
+        "input_file": "{{ ti.xcom_pull(task_ids='clean_email_dates') }}",  # ✅ Path to an already available file
+        "output_file": "/opt/airflow/dags/data_pipeline/data/cleaned_emails.csv",     # ✅ Where to save cleaned output
+        "path": "/opt/airflow/dags/data_pipeline/logs/data_cleaning_logger.log",      # ✅ Full path to log file
+        "logger_name": "data_cleaning_logger"
+    },
+    dag=dag,
+)
+
 
 gx_context = PythonOperator(
     task_id="setup_gx_context_and_logger",
@@ -111,37 +124,37 @@ suite = PythonOperator(
     task_id="expectation_suite",
     python_callable=define_expectations,
     op_kwargs={
-        "csv_path": clean_email_dates.output,
-        "context_root_dir": gx_context.output,
-        "log_path": f"{project_root_dir.output}/data_pipeline/logs/data_quality_log.log",
+        "log_path": "/opt/airflow/dags/data_pipeline/logs/data_quality_log.log",
         "logger_name": "data_quality_logger",
     },
+    provide_context=True,
     dag=dag,
 )
+
 
 validation_results = PythonOperator(
     task_id="validation",
     python_callable=validate_data,
     op_kwargs={
-        "csv_path": clean_email_dates.output,
-        "suite": suite.output,
-        "context_root_dir": gx_context.output,
-        "log_path": f"{project_root_dir.output}/data_pipeline/logs/data_quality_log.log",
+        "log_path": "/opt/airflow/dags/data_pipeline/logs/data_quality_log.log",
         "logger_name": "data_quality_logger",
     },
+    provide_context=True,
     dag=dag,
 )
+
 
 handle_anomaly = PythonOperator(
     task_id="anomaly",
     python_callable=handle_anomalies,
     op_kwargs={
-        "validation_results": validation_results.output,
-        "log_path": f"{project_root_dir.output}/data_pipeline/logs/data_anomaly_log.log",
+        "log_path": "/opt/airflow/dags/data_pipeline/logs/data_anomaly_log.log",
         "logger_name": "data_anomaly_logger",
     },
+    provide_context=True,
     dag=dag,
 )
+
 
 # # ------------------ Task Dependencies ------------------
 
@@ -150,6 +163,7 @@ handle_anomaly = PythonOperator(
     >> unzip_file_task
     >> preprocess_emails
     >> clean_email_dates
+    >> clean_data
     >> gx_context
     >> suite
     >> validation_results

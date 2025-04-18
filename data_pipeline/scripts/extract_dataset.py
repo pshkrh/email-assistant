@@ -32,7 +32,7 @@ def extract_enron_dataset(archive_path, extract_to, log_path, logger_name):
             data_extracting_logger.info(
                 "Dataset already extracted, skipping extraction."
             )
-            return None
+            return extract_to
 
         os.makedirs(extract_to, exist_ok=True)
         data_extracting_logger.info("Extracting the dataset...")
@@ -57,9 +57,8 @@ def extract_enron_dataset(archive_path, extract_to, log_path, logger_name):
 
 if __name__ == "__main__":
     PROJECT_ROOT_DIR = project_root()
-    EXTRACT_TO = "{PROJECT_ROOT_DIR}/data_pipeline/data/dataset"
-    ARCHIVE_PATH = "{PROJECT_ROOT_DIR}/data_pipeline/data/enron_mail_20150507.tar.gz"
-    LOG_PATH = "{PROJECT_ROOT_DIR}/data_pipeline/logs/data_extraction_log.log"
+    EXTRACT_TO = f"{PROJECT_ROOT_DIR}/data_pipeline/data/dataset"
+    ARCHIVE_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/data/enron_mail_20150507.tar.gz"
+    LOG_PATH = f"{PROJECT_ROOT_DIR}/data_pipeline/logs/data_extraction_log.log"
     LOGGER_NAME = "data_extraction_logger"
-
     extract_enron_dataset(ARCHIVE_PATH, EXTRACT_TO, LOG_PATH, LOGGER_NAME)

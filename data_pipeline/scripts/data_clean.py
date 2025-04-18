@@ -8,6 +8,8 @@ import traceback
 from create_logger import create_logger
 from contextlib import contextmanager
 from get_project_root import project_root
+from airflow.operators.python import get_current_context
+
 
 # Precompile regex patterns for better performance
 FORWARDED_PATTERN = re.compile(r"-----\s*Forwarded Message\s*-----", re.IGNORECASE)
@@ -206,7 +208,7 @@ def process_chunk(chunk, logger):
     return result, total_threads_extracted
 
 
-def data_clean(input_file, output_file, path, logger_name):
+def data_clean(input_file,output_file, path, logger_name):
     data_cleaning_logger = create_logger(path, logger_name)
 
     # Reduced chunk size to avoid memory issues
@@ -254,12 +256,13 @@ def data_clean(input_file, output_file, path, logger_name):
                 next(reader)
             except StopIteration:
                 data_cleaning_logger.info("All chunks already processed.")
-                return
+                context = get_current_context()
+                context['ti'].xcom_push(key='return_value', value=output_file)
+                return output_file
+
 
         # Process remaining chunks
         for chunk_number, chunk in enumerate(reader, start=start_chunk):
-            if chunk_number > 0:
-                return
             try:
                 data_cleaning_logger.info(
                     f"Processing chunk {chunk_number + 1} with {len(chunk)} rows..."
@@ -329,6 +332,9 @@ def data_clean(input_file, output_file, path, logger_name):
             f"Total email threads extracted: {total_threads_extracted}"
         )
         data_cleaning_logger.info(f"Dataset saved to: {output_file}")
+    context = get_current_context()
+    context['ti'].xcom_push(key='return_value', value=output_file)
+    return output_file
 
 
 if __name__ == "__main__":
